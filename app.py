@@ -18,6 +18,7 @@ PLAYERS_FILENAME    = 'player_profiles.json'
 CMDS = [
     'fixtures',
     'leaderboard',
+    'tournaments',
     'flask',
 ]
 
@@ -204,18 +205,15 @@ def hello():
     name = request.args.get("name", "World")
     return f'Hello, {escape(name)}!'
 
-@app.route('/golf')
-def golf():
-    active_tournaments = get_active_tournaments()
+@app.route('/golf/results')
+def golf_results():
+    tournament_id = request.args.get('tournamentid')
 
-    if len(active_tournaments) == 0:
-        print('No active tournaments. Exiting...')
+    if tournament_id is None:
+        print('tournamentid not specified. Exiting...')
         return
 
-    tournament = active_tournaments[0]
-
-    print(tournament['Name'])
-    leaderboard = get_leaderboard(tournament)
+    leaderboard = api_get_leaderboard(tournament_id)
     player_profiles = load_player_profiles()
     parsed_leaderboard = parse_leaderboard(leaderboard, player_profiles)
 
@@ -228,11 +226,48 @@ def golf():
 
         response += '{},{},{},\n'.format(player[1], rank, player[2])
 
-    print(response)
+    return response
+
+@app.route('/golf/tournaments')
+def golf_tournaments():
+    tournaments = api_get_all_tournaments()
+
+    response = ''
+    for tournament in tournaments:
+        start_date = datetime.fromisoformat(tournament['StartDate'])
+
+        response += '{},{},{},\n'.format(tournament['Name'], str(start_date.date()), tournament['TournamentID'])
+
     return response
 
 def main():
-    app.run(host='0.0.0.0')
+    args = parse_args()
+
+    if args.cmd == 'fixtures':
+        player_profiles = fetch_player_profiles()
+
+    elif args.cmd == 'leaderboard':
+        # player_profiles = load_player_profiles()
+
+        active_tournaments = get_active_tournaments()
+
+        if len(active_tournaments) == 0:
+            print('No active tournaments. Exiting...')
+            return
+
+        tournament = active_tournaments[0]
+
+        print(tournament['Name'])
+        leaderboard = get_leaderboard(tournament)
+        parse_leaderboard(leaderboard)
+
+    elif args.cmd == 'tournaments':
+        tournaments = api_get_all_tournaments()
+
+        pprint(tournaments)
+
+    elif args.cmd == 'flask':
+        app.run(host='0.0.0.0')
 
 if __name__ == '__main__':
     main()
