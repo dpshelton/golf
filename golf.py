@@ -7,7 +7,8 @@ from pprint import pprint, pformat
 from datetime import datetime, timedelta
 import time
 from prettytable import PrettyTable
-from flask import Flask, escape, request
+import sqlite3
+from flask import Flask, escape, request, render_template
 
 KEY = 'a478d29a98e54eac8e9ebf1f218dd0b8'
 
@@ -40,6 +41,8 @@ POINTS = [
     (40, 49  ,  3),
     (50, 1000,  1),
 ]
+
+app = Flask(__name__)
 
 def parse_args():
     description = 'Fantasy Golf Tool'
@@ -166,46 +169,31 @@ def load_player_profiles():
 
     return player_profiles
 
-# def main():
-#     args = parse_args()
-
-#     if args.cmd == 'fixtures':
-#         player_profiles = fetch_player_profiles()
-#     elif args.cmd == 'leaderboard':
-#         # player_profiles = load_player_profiles()
-
-#         active_tournaments = get_active_tournaments()
-
-#         if len(active_tournaments) == 0:
-#             print('No active tournaments. Exiting...')
-#             return
-
-#         tournament = active_tournaments[0]
-
-#         print(tournament['Name'])
-#         leaderboard = get_leaderboard(tournament)
-#         parse_leaderboard(leaderboard)
-#     elif args.cmd == 'flask':
-#         app = Flask(__name__)
-
-#         @app.route('/')
-#         def hello():
-#             name = request.args.get("name", "World")
-#             return f'Hello, {escape(name)}!'
-
-# if __name__ == '__main__':
-#     main()
-
-from flask import Flask, escape, request
-
-app = Flask(__name__)
+def get_db_connection():
+    conn = sqlite3.connect('database.db')
+    conn.row_factory = sqlite3.Row
+    return conn
 
 @app.route('/')
-def hello():
-    name = request.args.get("name", "World")
-    return f'Hello, {escape(name)}!'
+def index():
+    # name = request.args.get("name", "World")
+    # return f'Hello, {escape(name)}!'
 
-@app.route('/golf/results')
+    # tournaments = api_get_all_tournaments()
+
+    # response = ''
+    # for tournament in tournaments:
+    #     start_date = datetime.fromisoformat(tournament['StartDate'])
+
+    #     response += '{},{},{},\n'.format(tournament['Name'], str(start_date.date()), tournament['TournamentID'])
+
+    conn = get_db_connection()
+    posts = conn.execute('SELECT * FROM posts').fetchall()
+    conn.close()
+
+    return render_template('index.html')
+
+@app.route('/results')
 def golf_results():
     tournament_id = request.args.get('tournamentid')
 
@@ -228,17 +216,28 @@ def golf_results():
 
     return response
 
-@app.route('/golf/tournaments')
-def golf_tournaments():
+@app.route('/tournaments')
+def tournaments():
+    # tournaments = api_get_all_tournaments()
+
+    # response = ''
+    # for tournament in tournaments:
+    #     start_date = datetime.fromisoformat(tournament['StartDate'])
+
+    #     response += '{},{},{},\n'.format(tournament['Name'], str(start_date.date()), tournament['TournamentID'])
+
+    # return response
+
     tournaments = api_get_all_tournaments()
+    return render_template('tournaments.html', tournaments=tournaments)
 
-    response = ''
-    for tournament in tournaments:
-        start_date = datetime.fromisoformat(tournament['StartDate'])
+@app.route('/players')
+def players():
+    player_profiles = load_player_profiles()
+    # filtered_player_profiles =
+    player_profiles = [player_profile for player_profile in player_profiles if player_profile['DraftKingsName'] is not None]
 
-        response += '{},{},{},\n'.format(tournament['Name'], str(start_date.date()), tournament['TournamentID'])
-
-    return response
+    return render_template('players.html', players=player_profiles)
 
 def main():
     args = parse_args()
@@ -267,7 +266,7 @@ def main():
         pprint(tournaments)
 
     elif args.cmd == 'flask':
-        app.run(host='0.0.0.0')
+        app.run(host='0.0.0.0', debug=True)
 
 if __name__ == '__main__':
     main()
