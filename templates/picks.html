@@ -4,23 +4,17 @@
 {% block content %}
     <h1>{% block title %} Picks {% endblock %}</h1>
 
-    <div class="row">
-        <div class="list-group" id="picks">
-            {% for player in picks %}
-                <label class="list-group-item" id="player_{{ player['PlayerID'] }}">
-                    <div class="col col-left">
-                        <input class="form-check-input me-1" type="checkbox" value="" id="checkbox_{{ player['PlayerID'] }}">
-                        {{ player["DraftKingsName"] }}
-                    </div>
-                    <div class="col-1 col-right">
-                        Salary
-                    </div>
-                </label>
+    <div class="dropdown">
+        <button class="btn btn-secondary dropdown-toggle" type="button" id="dropdownMenuButton1" data-bs-toggle="dropdown" aria-expanded="false">
+            {{ selected_string }}
+        </button>
+        <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton1">
+            {% for tournament in tournaments %}
+            <li><a {% if tournamentid|int == tournament["TournamentID"]|int %}class="dropdown-item active"{% else %}class="dropdown-item"{% endif %} href="{{ url_for('picks')}}?tournamentid={{ tournament['TournamentID'] }}">{{ tournament["Name"] }} - {{ tournament["StartDate"] }}</a></li>
             {% endfor %}
-        </div>
+        </ul>
     </div>
 
-    <h1>Players</h1>
     <div class="row">
         <div class="list-group">
             {% for player in players %}
@@ -30,7 +24,7 @@
                         {{ player["DraftKingsName"] }}
                     </div>
                     <div class="col-1 col-right">
-                        Salary
+                        {{ player["DraftKingsSalary"] }}
                     </div>
                 </label>
             {% endfor %}
@@ -38,7 +32,7 @@
     </div>
 {% endblock %}
 
-{% block footer %}
+<!-- {% block footer %}
     <script>
         $(document).ready(function(){
             // $(":checkbox").change(function() {
@@ -63,4 +57,4 @@
             });
         });
     </script>
-{% endblock %}
+{% endblock %} -->

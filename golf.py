@@ -71,6 +71,9 @@ def api_get_all_tournaments():
 def api_get_leaderboard(tournament_id):
     return api_request('https://api.sportsdata.io/golf/v2/json/Leaderboard/{}'.format(tournament_id))
 
+def api_get_projections(tournament_id):
+    return api_request('https://api.sportsdata.io/golf/v2/json/PlayerTournamentProjectionStats/{}'.format(tournament_id))
+
 def get_active_tournaments():
     active_tournaments = []
 
@@ -212,6 +215,42 @@ def populate_tournaments_table():
     conn.commit()
     conn.close()
 
+def create_projections_table():
+    conn = get_db_connection()
+    curr = conn.cursor()
+    curr.execute('DROP TABLE IF EXISTS projections;')
+    curr.execute('''
+        CREATE TABLE projections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            TournamentID INTEGER,
+            PlayerID INTEGER,
+            DraftKingsName TEXT,
+            DraftKingsSalary INTEGER
+        );
+    ''')
+    conn.commit()
+    conn.close()
+
+def populate_projections_table(tournament_id):
+    projections = api_get_projections(tournament_id)
+    player_profiles = load_player_profiles()
+
+    conn = get_db_connection()
+    curr = conn.cursor()
+
+    for projection in projections:
+        player_profile = get_player_profile(projection['PlayerID'], player_profiles)
+
+        curr.execute("INSERT INTO projections (TournamentID, PlayerID, DraftKingsName, DraftKingsSalary) VALUES (?, ?, ?, ?)", (
+            tournament_id,
+            projection['PlayerID'],
+            player_profile['DraftKingsName'],
+            projection['DraftKingsSalary'],
+        ))
+
+    conn.commit()
+    conn.close()
+
 def get_tournaments():
     conn = get_db_connection()
 
@@ -242,12 +281,36 @@ def get_tournaments():
             strftime("%Y-%m-%d", "EndDate") as EndDate,
             Location,
             Venue
-        FROM tournaments WHERE EndDate < datetime('now')
+        FROM tournaments WHERE EndDate < datetime('now') AND EndDate >= datetime('now', '-1 year')
         ORDER BY EndDate DESC''').fetchall()
+
+    relevant_tournaments = conn.execute('''SELECT
+            TournamentID,
+            Name,
+            strftime("%Y-%m-%d", "StartDate") as StartDate,
+            strftime("%Y-%m-%d", "EndDate") as EndDate,
+            Location,
+            Venue
+        FROM tournaments WHERE EndDate >= datetime('now', '-2 days') AND StartDate <= datetime('now', '+21 days')
+        ORDER BY EndDate''').fetchall()
 
     conn.close()
 
-    return active_tournaments, upcoming_tournaments, past_tournaments
+    return active_tournaments, upcoming_tournaments, past_tournaments, relevant_tournaments
+
+def get_projections(tournament_id):
+    conn = get_db_connection()
+    projections = conn.execute('SELECT * FROM projections WHERE TournamentID == {}'.format(tournament_id)).fetchall()
+    conn.close()
+
+    if len(projections) == 0:
+        populate_projections_table(tournament_id)
+
+        conn = get_db_connection()
+        projections = conn.execute('SELECT * FROM projections WHERE TournamentID == {}'.format(tournament_id)).fetchall()
+        conn.close()
+
+    return projections
 
 @app.route('/')
 def index():
@@ -278,7 +341,7 @@ def results():
 
 @app.route('/tournaments')
 def tournaments():
-    active_tournaments, upcoming_tournaments, past_tournaments = get_tournaments()
+    active_tournaments, upcoming_tournaments, past_tournaments, relevant_tournaments = get_tournaments()
 
     return render_template('tournaments.html',
         active_tournaments      = active_tournaments,
@@ -288,27 +351,44 @@ def tournaments():
 
 @app.route('/picks')
 def picks():
-    player_profiles = load_player_profiles()
-    player_profiles = [player_profile for player_profile in player_profiles if player_profile['DraftKingsName'] is not None]
+    tournament_id = request.args.get('tournamentid')
 
-    return render_template('picks.html', picks=player_profiles[0:10], players=player_profiles)
+    active_tournaments, upcoming_tournaments, past_tournaments, relevant_tournaments = get_tournaments()
+
+    selected_tournament = None
+    for tournament in relevant_tournaments:
+        if int(tournament_id) == int(tournament['TournamentID']):
+            selected_tournament = tournament
+            break
+
+    if selected_tournament is None:
+        selected_string = 'Select a tournament'
+        projections = []
+    else:
+        selected_string = '{} - {}'.format(tournament['Name'], tournament['StartDate'])
+        projections = get_projections(selected_tournament['TournamentID'])
+        player_profiles = load_player_profiles()
+
+    players = []
+    for projection in projections:
+        player_profile = get_player_profile(projection['PlayerID'], player_profiles)
+
+        if projection['DraftKingsSalary'] is not None:
+            players.append({
+                'DraftKingsName': player_profile['DraftKingsName'],
+                'DraftKingsSalary': projection['DraftKingsSalary'],
+            })
+
+    if len(players) > 0:
+        players = sorted(players, key=lambda x: x['DraftKingsSalary'], reverse=True)
+
+    return render_template('picks.html', players=players, tournaments=relevant_tournaments, tournamentid=tournament_id, selected_string=selected_string)
 
 def sandbox():
-    conn = get_db_connection()
+    projections = get_projections(423)
 
-    tournaments = conn.execute('''SELECT
-            TournamentID,
-            Name,
-            strftime("%m-%d-%Y", "StartDate") as StartDate,
-            strftime("%m-%d-%Y", "EndDate") as EndDate,
-            Location,
-            Venue
-        FROM tournaments''').fetchall()
-
-    conn.close()
-
-    for tournament in tournaments:
-        print(tournament['StartDate'])
+    for projection in projections:
+        print(projection['DraftKingsName'])
 
 def main():
     args = parse_args()
