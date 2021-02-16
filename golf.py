@@ -356,10 +356,11 @@ def picks():
     active_tournaments, upcoming_tournaments, past_tournaments, relevant_tournaments = get_tournaments()
 
     selected_tournament = None
-    for tournament in relevant_tournaments:
-        if int(tournament_id) == int(tournament['TournamentID']):
-            selected_tournament = tournament
-            break
+    if tournament_id is not None:
+        for tournament in relevant_tournaments:
+            if int(tournament_id) == int(tournament['TournamentID']):
+                selected_tournament = tournament
+                break
 
     if selected_tournament is None:
         selected_string = 'Select a tournament'
