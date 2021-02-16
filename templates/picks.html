@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% set active_page = "picks" %}
+
+{% block content %}
+    <h1>{% block title %} Picks {% endblock %}</h1>
+
+    <div class="row">
+        <div class="list-group" id="picks">
+            {% for player in picks %}
+                <label class="list-group-item" id="player_{{ player['PlayerID'] }}">
+                    <div class="col col-left">
+                        <input class="form-check-input me-1" type="checkbox" value="" id="checkbox_{{ player['PlayerID'] }}">
+                        {{ player["DraftKingsName"] }}
+                    </div>
+                    <div class="col-1 col-right">
+                        Salary
+                    </div>
+                </label>
+            {% endfor %}
+        </div>
+    </div>
+
+    <h1>Players</h1>
+    <div class="row">
+        <div class="list-group">
+            {% for player in players %}
+                <label class="list-group-item">
+                    <div class="col col-left">
+                        <input class="form-check-input me-1" type="checkbox" value="">
+                        {{ player["DraftKingsName"] }}
+                    </div>
+                    <div class="col-1 col-right">
+                        Salary
+                    </div>
+                </label>
+            {% endfor %}
+        </div>
+    </div>
+{% endblock %}
+
+{% block footer %}
+    <script>
+        $(document).ready(function(){
+            // $(":checkbox").change(function() {
+            //     $("this.id").hide();
+            //     // $.post("index.php", { id: this.id, checked: this.checked });
+            // });
+
+            $(":checkbox").click(function() {
+                $("#picks").html(`
+                    {% for player in picks %}
+                        <label class="list-group-item">
+                            <div class="col col-left">
+                                <input class="form-check-input me-1" type="checkbox" value="" id="checkbox_{{ player['PlayerID'] }}">
+                                {{ player["DraftKingsName"] }}
+                            </div>
+                            <div class="col-1 col-right">
+                                Salary
+                            </div>
+                        </label>
+                    {% endfor %}
+                `)
+            });
+        });
+    </script>
+{% endblock %}

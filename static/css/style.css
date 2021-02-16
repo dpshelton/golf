@@ -4,3 +4,18 @@
     text-align: center;
     padding: 10px;
 } */
+
+.col-left {
+    display: inline;
+    float: left;
+}
+
+.col-right {
+    display: inline;
+    float: right;
+}
+
+.col-right {
+    display: inline;
+    float: right;
+}

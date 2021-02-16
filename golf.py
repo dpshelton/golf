@@ -20,6 +20,7 @@ CMDS = [
     'fixtures',
     'leaderboard',
     'tournaments',
+    'sandbox',
     'flask',
 ]
 
@@ -174,27 +175,86 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
-@app.route('/')
-def index():
-    # name = request.args.get("name", "World")
-    # return f'Hello, {escape(name)}!'
-
-    # tournaments = api_get_all_tournaments()
-
-    # response = ''
-    # for tournament in tournaments:
-    #     start_date = datetime.fromisoformat(tournament['StartDate'])
-
-    #     response += '{},{},{},\n'.format(tournament['Name'], str(start_date.date()), tournament['TournamentID'])
-
+def create_tournaments_table():
     conn = get_db_connection()
-    posts = conn.execute('SELECT * FROM posts').fetchall()
+    curr = conn.cursor()
+    curr.execute('DROP TABLE IF EXISTS tournaments;')
+    curr.execute('''
+        CREATE TABLE tournaments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            TournamentID INTEGER NOT NULL,
+            Name TEXT NOT NULL,
+            StartDate TEXT NOT NULL,
+            EndDate TEXT NOT NULL,
+            Location TEXT,
+            Venue TEXT
+        );
+    ''')
+    conn.commit()
     conn.close()
 
+def populate_tournaments_table():
+    tournaments = api_get_all_tournaments()
+
+    conn = get_db_connection()
+    curr = conn.cursor()
+
+    for tournament in tournaments:
+        curr.execute("INSERT INTO tournaments (TournamentID, Name, StartDate, EndDate, Location, Venue) VALUES (?, ?, ?, ?, ?, ?)", (
+            tournament['TournamentID'],
+            tournament['Name'],
+            tournament['StartDate'],
+            tournament['EndDate'],
+            tournament['Location'],
+            tournament['Venue'],
+        ))
+
+    conn.commit()
+    conn.close()
+
+def get_tournaments():
+    conn = get_db_connection()
+
+    active_tournaments = conn.execute('''SELECT
+            TournamentID,
+            Name,
+            strftime("%Y-%m-%d", "StartDate") as StartDate,
+            strftime("%Y-%m-%d", "EndDate") as EndDate,
+            Location,
+            Venue
+        FROM tournaments WHERE StartDate <= datetime('now') AND EndDate >= datetime('now')
+        ORDER BY StartDate ''').fetchall()
+
+    upcoming_tournaments = conn.execute('''SELECT
+            TournamentID,
+            Name,
+            strftime("%Y-%m-%d", "StartDate") as StartDate,
+            strftime("%Y-%m-%d", "EndDate") as EndDate,
+            Location,
+            Venue
+        FROM tournaments WHERE StartDate > datetime('now')
+        ORDER BY StartDate ''').fetchall()
+
+    past_tournaments = conn.execute('''SELECT
+            TournamentID,
+            Name,
+            strftime("%Y-%m-%d", "StartDate") as StartDate,
+            strftime("%Y-%m-%d", "EndDate") as EndDate,
+            Location,
+            Venue
+        FROM tournaments WHERE EndDate < datetime('now')
+        ORDER BY EndDate DESC''').fetchall()
+
+    conn.close()
+
+    return active_tournaments, upcoming_tournaments, past_tournaments
+
+@app.route('/')
+def index():
     return render_template('index.html')
 
 @app.route('/results')
-def golf_results():
+def results():
     tournament_id = request.args.get('tournamentid')
 
     if tournament_id is None:
@@ -218,26 +278,37 @@ def golf_results():
 
 @app.route('/tournaments')
 def tournaments():
-    # tournaments = api_get_all_tournaments()
+    active_tournaments, upcoming_tournaments, past_tournaments = get_tournaments()
 
-    # response = ''
-    # for tournament in tournaments:
-    #     start_date = datetime.fromisoformat(tournament['StartDate'])
+    return render_template('tournaments.html',
+        active_tournaments      = active_tournaments,
+        upcoming_tournaments    = upcoming_tournaments,
+        past_tournaments        = past_tournaments,
+    )
 
-    #     response += '{},{},{},\n'.format(tournament['Name'], str(start_date.date()), tournament['TournamentID'])
-
-    # return response
-
-    tournaments = api_get_all_tournaments()
-    return render_template('tournaments.html', tournaments=tournaments)
-
-@app.route('/players')
-def players():
+@app.route('/picks')
+def picks():
     player_profiles = load_player_profiles()
-    # filtered_player_profiles =
     player_profiles = [player_profile for player_profile in player_profiles if player_profile['DraftKingsName'] is not None]
 
-    return render_template('players.html', players=player_profiles)
+    return render_template('picks.html', picks=player_profiles[0:10], players=player_profiles)
+
+def sandbox():
+    conn = get_db_connection()
+
+    tournaments = conn.execute('''SELECT
+            TournamentID,
+            Name,
+            strftime("%m-%d-%Y", "StartDate") as StartDate,
+            strftime("%m-%d-%Y", "EndDate") as EndDate,
+            Location,
+            Venue
+        FROM tournaments''').fetchall()
+
+    conn.close()
+
+    for tournament in tournaments:
+        print(tournament['StartDate'])
 
 def main():
     args = parse_args()
@@ -261,12 +332,14 @@ def main():
         parse_leaderboard(leaderboard)
 
     elif args.cmd == 'tournaments':
-        tournaments = api_get_all_tournaments()
-
-        pprint(tournaments)
+        create_tournaments_table()
+        populate_tournaments_table()
 
     elif args.cmd == 'flask':
         app.run(host='0.0.0.0', debug=True)
+
+    elif args.cmd == 'sandbox':
+        sandbox()
 
 if __name__ == '__main__':
     main()

@@ -1,32 +1,72 @@
-{% extends 'base.html' %}
-{% set active_page = 'tournaments' %}
+{% extends "base.html" %}
+{% set active_page = "tournaments" %}
+{% block title %} Tournaments {% endblock %}
 
 {% block content %}
-    <h1>{% block title %} Welcome to GTGolf {% endblock %}</h1>
+    <h1>Active Tournaments</h1>
+    <table class="table">
+        <thead>
+            <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Date</th>
+                <th scope="col">Location</th>
+                <th scope="col">Venue</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tournament in active_tournaments %}
+            <tr>
+                <th scope="row">{{ tournament["Name"] }}</th>
+                <td>{{ tournament["StartDate"] }}</td>
+                <td>{{ tournament["Location"] }}</td>
+                <td>{{ tournament["Venue"] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 
-    <div class="list-group">
-        {% for tournament in tournaments %}
-            <label class="list-group-item">
-                <input class="form-check-input me-1" type="checkbox" value="">
-                {{ tournament['Name'] }}
-            </label>
-        {% endfor %}
-    </div>
-    <!-- {% for post in posts %}
-        <a href="#">
-            <h2>{{ post['title'] }}</h2>
-        </a>
-        <span class="badge bg-secondary">{{ post['created'] }}</span>
-        <hr>
-    {% endfor %}
 
-    {% for post in posts %}
-        <a href="#">
-            <h2>{{ post['title'] }}</h2>
-        </a>
-        <span class="badge bg-secondary">{{ post['created'] }}</span>
-        <hr>
-    {% endfor %} -->
+    <h1>Upcoming Tournaments</h1>
+    <table class="table">
+        <thead>
+            <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Date</th>
+                <th scope="col">Location</th>
+                <th scope="col">Venue</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tournament in upcoming_tournaments %}
+            <tr>
+                <th scope="row">{{ tournament["Name"] }}</th>
+                <td>{{ tournament["StartDate"] }}</td>
+                <td>{{ tournament["Location"] }}</td>
+                <td>{{ tournament["Venue"] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 
-    <span class="badge bg-secondary">42</span>
+    <h1>Past Tournaments</h1>
+    <table class="table">
+        <thead>
+            <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Date</th>
+                <th scope="col">Location</th>
+                <th scope="col">Venue</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tournament in past_tournaments %}
+            <tr>
+                <th scope="row">{{ tournament["Name"] }}</th>
+                <td>{{ tournament["StartDate"] }}</td>
+                <td>{{ tournament["Location"] }}</td>
+                <td>{{ tournament["Venue"] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 {% endblock %}
