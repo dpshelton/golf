@@ -9,6 +9,7 @@ import time
 from prettytable import PrettyTable
 import sqlite3
 from flask import Flask, escape, request, render_template
+from draft_kings import Sport, Client
 
 KEY = 'a478d29a98e54eac8e9ebf1f218dd0b8'
 
@@ -101,10 +102,15 @@ def get_next_tournament():
 
     return tournaments
 
-def get_player_profile(player_id, player_profiles):
+def get_player_profile(player_id=None, draft_kings_player_id=None, player_profiles=None):
     for player_profile in player_profiles:
-        if player_id == player_profile['PlayerID']:
-            return player_profile
+        if player_id is not None:
+            if player_id == player_profile['PlayerID']:
+                return player_profile
+
+        if draft_kings_player_id is not None:
+            if draft_kings_player_id == player_profile['DraftKingsPlayerID']:
+                return player_profile
 
     return None
 
@@ -131,7 +137,7 @@ def parse_leaderboard(leaderboard, player_profiles):
         elif player['Rank'] != prev_rank:
             rank = len(parsed_leaderboard)
 
-        player_profile = get_player_profile(player['PlayerID'], player_profiles)
+        player_profile = get_player_profile(player_id=player['PlayerID'], player_profiles=player_profiles)
         parsed_leaderboard.append((
             str(rank),
             player_profile['DraftKingsName'],
@@ -215,15 +221,16 @@ def populate_tournaments_table():
     conn.commit()
     conn.close()
 
-def create_projections_table():
+def create_salaries_table():
     conn = get_db_connection()
     curr = conn.cursor()
-    curr.execute('DROP TABLE IF EXISTS projections;')
+    curr.execute('DROP TABLE IF EXISTS salaries;')
     curr.execute('''
-        CREATE TABLE projections (
+        CREATE TABLE salaries (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             TournamentID INTEGER,
             PlayerID INTEGER,
+            DraftKingsPlayerID INTEGER,
             DraftKingsName TEXT,
             DraftKingsSalary INTEGER
         );
@@ -231,25 +238,97 @@ def create_projections_table():
     conn.commit()
     conn.close()
 
-def populate_projections_table(tournament_id):
-    projections = api_get_projections(tournament_id)
+def populate_salaries_table(tournament_id):
+    tournament = get_tournament_from_id(tournament_id)
+    if tournament is None:
+        return
+
     player_profiles = load_player_profiles()
 
-    conn = get_db_connection()
-    curr = conn.cursor()
+    contests = Client().contests(sport=Sport.GOLF)
+    for draft_group in contests.draft_groups:
+        draft_group_details = Client().draft_group_details(draft_group_id=draft_group.draft_group_id)
 
-    for projection in projections:
-        player_profile = get_player_profile(projection['PlayerID'], player_profiles)
+        if draft_group_details.games[0].name != tournament['Name']:
+            continue
+        if draft_group_details.leagues[0].abbreviation != 'PGA':
+            continue
+        game_type_rules = Client().game_type_rules(game_type_id=draft_group_details.contest_details.type_id)
+        if not game_type_rules.salary_cap_details.is_enabled or int(game_type_rules.salary_cap_details.maximum_value) != 50000:
+            continue
 
-        curr.execute("INSERT INTO projections (TournamentID, PlayerID, DraftKingsName, DraftKingsSalary) VALUES (?, ?, ?, ?)", (
-            tournament_id,
-            projection['PlayerID'],
-            player_profile['DraftKingsName'],
-            projection['DraftKingsSalary'],
-        ))
+        draftables = Client().draftables(draft_group_id=draft_group_details.draft_group_id)
 
-    conn.commit()
-    conn.close()
+        conn = get_db_connection()
+        curr = conn.cursor()
+
+        for player in draftables.players:
+            player_profile = get_player_profile(draft_kings_player_id=player.player_id, player_profiles=player_profiles)
+
+            if player_profile is not None:
+                if player.name_details.display != player_profile['DraftKingsName']:
+                    print('Player names do not match {} vs {}'.format(player.name_details.display, player_profile['DraftKingsName']))
+
+                curr.execute("INSERT INTO salaries (TournamentID, PlayerID, DraftKingsPlayerID, DraftKingsName, DraftKingsSalary) VALUES (?, ?, ?, ?, ?)", (
+                    tournament_id,
+                    player_profile['PlayerID'],
+                    player_profile['DraftKingsPlayerID'],
+                    player_profile['DraftKingsName'],
+                    player.salary,
+                ))
+            else:
+                print('WTF {}'.format(player.name_details.display))
+
+        conn.commit()
+        conn.close()
+
+        break
+
+# def populate_salaries_table(tournament_id):
+#     # player_profiles = load_player_profiles()
+
+#     # contests = Client().contests(sport=Sport.GOLF)
+#     # for draft_group in contests.draft_groups:
+#     #     draft_group_details = Client().draft_group_details(draft_group_id=draft_group.draft_group_id)
+#     #     if draft_group_details.leagues[0].abbreviation == 'PGA':
+#     #         game_type_rules = Client().game_type_rules(game_type_id=draft_group_details.contest_details.type_id)
+#     #         if game_type_rules.salary_cap_details.is_enabled and int(game_type_rules.salary_cap_details.maximum_value) == 50000:
+#     #             # print(draft_group_details.games[0].name)
+#     #             # print(draft_group_details.draft_group_id)
+#     #             print(dir(Client().available_players(draft_group_id=draft_group_details.draft_group_id)))
+
+#     #             draftables = Client().draftables(draft_group_id=draft_group_details.draft_group_id)
+#     #             for player in draftables.players:
+#     #                 player_profile = get_player_profile(draft_kings_player_id=player.player_id, player_profiles=player_profiles)
+
+#     #                 if player_profile is not None:
+#     #                     if player.name_details.display != player_profile['DraftKingsName']:
+#     #                         print('Player names do not match {} vs {}'.format(player.name_details.display, player_profile['DraftKingsName']))
+#     #                     print('{}, {}, {}, {}'.format(player.player_id, player.name_details.display, player_profile['DraftKingsName'], player.salary))
+#     #                 else:
+#     #                     print('WTF {}'.format(player.name_details.display))
+
+#     if tournament is not None:
+#         tournament['Name']
+
+#     salaries = api_get_salaries(tournament_id)
+#     player_profiles = load_player_profiles()
+
+#     conn = get_db_connection()
+#     curr = conn.cursor()
+
+#     for salary in salaries:
+#         player_profile = get_player_profile(player_id=salary['PlayerID'], player_profiles=player_profiles)
+
+#         curr.execute("INSERT INTO salaries (TournamentID, PlayerID, DraftKingsName, DraftKingsSalary) VALUES (?, ?, ?, ?)", (
+#             tournament_id,
+#             salary['PlayerID'],
+#             player_profile['DraftKingsName'],
+#             salary['DraftKingsSalary'],
+#         ))
+
+#     conn.commit()
+#     conn.close()
 
 def get_tournaments():
     conn = get_db_connection()
@@ -298,19 +377,29 @@ def get_tournaments():
 
     return active_tournaments, upcoming_tournaments, past_tournaments, relevant_tournaments
 
-def get_projections(tournament_id):
+def get_tournament_from_id(tournament_id):
     conn = get_db_connection()
-    projections = conn.execute('SELECT * FROM projections WHERE TournamentID == {}'.format(tournament_id)).fetchall()
+    tournaments = conn.execute('SELECT * FROM tournaments WHERE TournamentID == {}'.format(tournament_id)).fetchall()
     conn.close()
 
-    if len(projections) == 0:
-        populate_projections_table(tournament_id)
+    if len(tournaments) >= 0:
+        return tournaments[0]
+    else:
+        return None
+
+def get_salaries(tournament_id):
+    conn = get_db_connection()
+    salaries = conn.execute('SELECT * FROM salaries WHERE TournamentID == {}'.format(tournament_id)).fetchall()
+    conn.close()
+
+    if len(salaries) == 0:
+        populate_salaries_table(tournament_id)
 
         conn = get_db_connection()
-        projections = conn.execute('SELECT * FROM projections WHERE TournamentID == {}'.format(tournament_id)).fetchall()
+        salaries = conn.execute('SELECT * FROM salaries WHERE TournamentID == {}'.format(tournament_id)).fetchall()
         conn.close()
 
-    return projections
+    return salaries
 
 @app.route('/')
 def index():
@@ -364,20 +453,20 @@ def picks():
 
     if selected_tournament is None:
         selected_string = 'Select a tournament'
-        projections = []
+        salaries = []
     else:
         selected_string = '{} - {}'.format(tournament['Name'], tournament['StartDate'])
-        projections = get_projections(selected_tournament['TournamentID'])
+        salaries = get_salaries(selected_tournament['TournamentID'])
         player_profiles = load_player_profiles()
 
     players = []
-    for projection in projections:
-        player_profile = get_player_profile(projection['PlayerID'], player_profiles)
+    for salary in salaries:
+        player_profile = get_player_profile(player_id=salary['PlayerID'], player_profiles=player_profiles)
 
-        if projection['DraftKingsSalary'] is not None:
+        if salary['DraftKingsSalary'] is not None:
             players.append({
                 'DraftKingsName': player_profile['DraftKingsName'],
-                'DraftKingsSalary': projection['DraftKingsSalary'],
+                'DraftKingsSalary': salary['DraftKingsSalary'],
             })
 
     if len(players) > 0:
@@ -386,10 +475,37 @@ def picks():
     return render_template('picks.html', players=players, tournaments=relevant_tournaments, tournamentid=tournament_id, selected_string=selected_string)
 
 def sandbox():
-    projections = get_projections(423)
+    create_salaries_table()
 
-    for projection in projections:
-        print(projection['DraftKingsName'])
+    player_profiles = load_player_profiles()
+    print('hey')
+    contests = Client().contests(sport=Sport.GOLF)
+
+    for draft_group in contests.draft_groups:
+        draft_group_details = Client().draft_group_details(draft_group_id=draft_group.draft_group_id)
+        print(draft_group_details.games[0].name)
+        if draft_group_details.leagues[0].abbreviation == 'PGA':
+            game_type_rules = Client().game_type_rules(game_type_id=draft_group_details.contest_details.type_id)
+            if game_type_rules.salary_cap_details.is_enabled and int(game_type_rules.salary_cap_details.maximum_value) == 50000:
+                draftables = Client().draftables(draft_group_id=draft_group_details.draft_group_id)
+                for player in draftables.players:
+                    player_profile = get_player_profile(draft_kings_player_id=player.player_id, player_profiles=player_profiles)
+
+                    if player_profile is not None:
+                        if player.name_details.display != player_profile['DraftKingsName']:
+                            print('Player names do not match {} vs {}'.format(player.name_details.display, player_profile['DraftKingsName']))
+                        print('{}, {}, {}, {}'.format(player.player_id, player.name_details.display, player_profile['DraftKingsName'], player.salary))
+                    else:
+                        print('WTF {}'.format(player.name_details.display))
+
+                    # print(player_profile)
+                    # print(dir(player))
+                    # print(player)
+
+
+                # print(game_type_rules.salary_cap_details)
+            # print(Client().game_type_rules(game_type_id=draft_group_details.contest_details.type_id))
+            # print(draft_group_details)
 
 def main():
     args = parse_args()
@@ -417,7 +533,7 @@ def main():
         populate_tournaments_table()
 
     elif args.cmd == 'flask':
-        app.run(host='0.0.0.0', debug=True)
+        app.run(host='0.0.0.0', port=80, debug=True)
 
     elif args.cmd == 'sandbox':
         sandbox()
