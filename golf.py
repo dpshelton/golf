@@ -639,7 +639,7 @@ def add_picks():
     add_pick('Greg', TOURNAMENT_ID, 'Collin Morikawa')
     add_pick('Greg', TOURNAMENT_ID, 'Viktor Hovland')
     add_pick('Greg', TOURNAMENT_ID, 'Max Homa')
-    add_pick('Greg', TOURNAMENT_ID, 'Cameron Champ')
+    add_pick('Greg', TOURNAMENT_ID, 'Doug Ghim')
     add_pick('Greg', TOURNAMENT_ID, 'Charl Schwartzel')
 
     add_pick('Mike', TOURNAMENT_ID, 'Viktor Hovland')
@@ -682,10 +682,10 @@ def get_picks():
     return picks
 
 def sandbox():
-    create_leaderboard_table()
-    update_leaderboard(TOURNAMENT_ID)
-    # create_picks_table()
-    # add_picks()
+    # create_leaderboard_table()
+    # update_leaderboard(TOURNAMENT_ID)
+    create_picks_table()
+    add_picks()
 
 def main():
     args = parse_args()

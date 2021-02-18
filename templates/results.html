@@ -4,6 +4,7 @@
 
 {% block content %}
     <h1>The Genesis Invitational</h1>
+    <h6>Updated {{ last_updated['LeaderboardLastUpdated'] }}</h6>
 
     {% for owner in owners %}
         <h2>{{ owner }}</h2>
@@ -21,7 +22,7 @@
                     <th class="col-1 align-middle" scope="row">{% if player["Rank"] != "None" %}{{ player["Rank"] }}{% else %}-{% endif %}</th>
                     <td class="col-2 align-middle"><img src="{{ player['PhotoUrl'] }}" class="figure-img img-fluid rounded" alt="..." style="height:50%;"></td>
                     <td class="align-middle">{{ player["DraftKingsName"] }}</td>
-                    <td class="col-1 align-middle">{{ player["Points"] }}</td>
+                    <td class="col-1 align-middle">{% if player["Rank"] != "None" %}{{ player["Points"] }}{% else %}-{% endif %}</td>
                 </tr>
                 {% endfor %}
                 <tr>
@@ -33,7 +34,6 @@
     {% endfor %}
 
     <h2>Leaderboard</h2>
-    <h4>Updated {{ last_updated['LeaderboardLastUpdated'] }}</h4>
     <table class="table table-success table-striped">
         <thead>
             <tr>
@@ -47,7 +47,7 @@
             <tr>
                 <th class="align-middle" scope="row">{% if player["Rank"] != "None" %}{{ player["Rank"] }}{% else %}-{% endif %}</th>
                 <td class="align-middle">{{ player["DraftKingsName"] }}</td>
-                <td class="align-middle">{{ player["Points"] }}</td>
+                <td class="align-middle">{% if player["Rank"] != "None" %}{{ player["Points"] }}{% else %}-{% endif %}</td>
             </tr>
             {% endfor %}
         </tbody>
