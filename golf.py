@@ -6,10 +6,13 @@ import json
 from pprint import pprint, pformat
 from datetime import datetime, timedelta
 import time
+import inspect
 from prettytable import PrettyTable
 import sqlite3
 from flask import Flask, escape, request, render_template
 from draft_kings import Sport, Client
+
+TOURNAMENT_ID = 425
 
 KEY = 'a478d29a98e54eac8e9ebf1f218dd0b8'
 
@@ -19,29 +22,38 @@ PLAYERS_FILENAME    = 'player_profiles.json'
 
 CMDS = [
     'fixtures',
-    'leaderboard',
+    'update-leaderboard',
+    'create-leaderboard-table',
     'tournaments',
     'sandbox',
     'flask',
 ]
 
 POINTS = [
-    (0 , 0   , 100),
-    (1 , 1   , 75),
-    (2 , 2   , 50),
-    (3 , 3   , 30),
-    (4 , 4   , 25),
-    (5 , 5   , 20),
-    (6 , 6   , 18),
-    (7 , 7   , 16),
-    (8 , 8   , 14),
-    (9 , 9   , 12),
-    (10, 14  , 10),
-    (15, 19  ,  8),
-    (20, 29  ,  6),
-    (30, 39  ,  5),
-    (40, 49  ,  3),
-    (50, 1000,  1),
+    (1 , 1   , 100),
+    (2 , 2   , 75),
+    (3 , 3   , 50),
+    (4 , 4   , 30),
+    (5 , 5   , 25),
+    (6 , 6   , 20),
+    (7 , 7   , 18),
+    (8 , 8   , 16),
+    (9 , 9   , 14),
+    (10, 10  , 12),
+    (11, 15  , 10),
+    (16, 20  ,  8),
+    (21, 30  ,  6),
+    (31, 40  ,  5),
+    (41, 50  ,  3),
+    (51, 1000,  1),
+]
+
+OWNERS = [
+    'Ben',
+    'Greg',
+    'Mike',
+    'Don',
+    'Sean',
 ]
 
 app = Flask(__name__)
@@ -64,15 +76,19 @@ def api_request(url):
     return json.loads(r.text)
 
 def api_get_all_players():
+    print('API-CALL: {}'.format(inspect.currentframe().f_code.co_name))
     return api_request('https://api.sportsdata.io/golf/v2/json/Players')
 
 def api_get_all_tournaments():
+    print('API-CALL: {}'.format(inspect.currentframe().f_code.co_name))
     return api_request('https://api.sportsdata.io/golf/v2/json/Tournaments')
 
 def api_get_leaderboard(tournament_id):
+    print('API-CALL: {}'.format(inspect.currentframe().f_code.co_name))
     return api_request('https://api.sportsdata.io/golf/v2/json/Leaderboard/{}'.format(tournament_id))
 
 def api_get_projections(tournament_id):
+    print('API-CALL: {}'.format(inspect.currentframe().f_code.co_name))
     return api_request('https://api.sportsdata.io/golf/v2/json/PlayerTournamentProjectionStats/{}'.format(tournament_id))
 
 def get_active_tournaments():
@@ -114,6 +130,13 @@ def get_player_profile(player_id=None, draft_kings_player_id=None, player_profil
 
     return None
 
+def get_player_id_from_name(player_name, player_profiles):
+    for player_profile in player_profiles:
+        if player_name == player_profile['DraftKingsName']:
+            return player_profile['PlayerID']
+
+    return None
+
 def get_points(rank):
     if rank is None:
         return 0
@@ -129,38 +152,25 @@ def parse_leaderboard(leaderboard, player_profiles):
     prev_rank = None
     parsed_leaderboard = []
     rank = None
+    # Assigning rank starting at 1 (instead of 0)
     for i, player in enumerate(leaderboard['Players']):
-        if i == 0:
-            rank = int(player['Rank'])
-        elif player['Rank'] is None:
+        if player['Rank'] is None:
             rank = None
+        elif prev_rank is None:
+            rank = 1
         elif player['Rank'] != prev_rank:
-            rank = len(parsed_leaderboard)
+            rank = len(parsed_leaderboard) + 1
 
         player_profile = get_player_profile(player_id=player['PlayerID'], player_profiles=player_profiles)
-        parsed_leaderboard.append((
-            str(rank),
-            player_profile['DraftKingsName'],
-            str(get_points(rank)),
-        ))
+        parsed_leaderboard.append({
+            'PlayerID'          : player['PlayerID'],
+            'Rank'              : str(rank),
+            'DraftKingsPlayerID': player_profile['DraftKingsPlayerID'],
+            'DraftKingsName'    : player_profile['DraftKingsName'],
+            'Points'            : str(get_points(rank)),
+        })
 
         prev_rank = player['Rank']
-
-    table = PrettyTable()
-    table.field_names = [
-        'Rank',
-        'Name',
-        'Points',
-    ]
-
-    for player in parsed_leaderboard:
-        table.add_row([
-            player[0],
-            player[1],
-            player[2],
-        ])
-
-    print(table)
 
     return parsed_leaderboard
 
@@ -209,7 +219,7 @@ def populate_tournaments_table():
     curr = conn.cursor()
 
     for tournament in tournaments:
-        curr.execute("INSERT INTO tournaments (TournamentID, Name, StartDate, EndDate, Location, Venue) VALUES (?, ?, ?, ?, ?, ?)", (
+        curr.execute('INSERT INTO tournaments (TournamentID, Name, StartDate, EndDate, Location, Venue) VALUES (?, ?, ?, ?, ?, ?)', (
             tournament['TournamentID'],
             tournament['Name'],
             tournament['StartDate'],
@@ -269,7 +279,7 @@ def populate_salaries_table(tournament_id):
                 if player.name_details.display != player_profile['DraftKingsName']:
                     print('Player names do not match {} vs {}'.format(player.name_details.display, player_profile['DraftKingsName']))
 
-                curr.execute("INSERT INTO salaries (TournamentID, PlayerID, DraftKingsPlayerID, DraftKingsName, DraftKingsSalary) VALUES (?, ?, ?, ?, ?)", (
+                curr.execute('INSERT INTO salaries (TournamentID, PlayerID, DraftKingsPlayerID, DraftKingsName, DraftKingsSalary) VALUES (?, ?, ?, ?, ?)', (
                     tournament_id,
                     player_profile['PlayerID'],
                     player_profile['DraftKingsPlayerID'],
@@ -320,7 +330,7 @@ def populate_salaries_table(tournament_id):
 #     for salary in salaries:
 #         player_profile = get_player_profile(player_id=salary['PlayerID'], player_profiles=player_profiles)
 
-#         curr.execute("INSERT INTO salaries (TournamentID, PlayerID, DraftKingsName, DraftKingsSalary) VALUES (?, ?, ?, ?)", (
+#         curr.execute('INSERT INTO salaries (TournamentID, PlayerID, DraftKingsName, DraftKingsSalary) VALUES (?, ?, ?, ?)', (
 #             tournament_id,
 #             salary['PlayerID'],
 #             player_profile['DraftKingsName'],
@@ -405,28 +415,42 @@ def get_salaries(tournament_id):
 def index():
     return render_template('index.html')
 
+def get_player_standing(player_id, leaderboard):
+    for player in leaderboard:
+        if int(player_id) == int(player['PlayerID']):
+            return player
+
+    return None
+
 @app.route('/results')
 def results():
-    tournament_id = request.args.get('tournamentid')
+    # tournament_id = request.args.get('tournamentid')
+    tournament_id = TOURNAMENT_ID  # TODO: switch back to dropdown
 
-    if tournament_id is None:
-        print('tournamentid not specified. Exiting...')
-        return
+    leaderboard = get_leaderboard(tournament_id)
 
-    leaderboard = api_get_leaderboard(tournament_id)
     player_profiles = load_player_profiles()
-    parsed_leaderboard = parse_leaderboard(leaderboard, player_profiles)
+    picks = get_picks()
 
-    response = ''
-    for player in parsed_leaderboard:
-        if player[0] is None or player[0] == 'None':
-            rank = None
-        else:
-            rank = int(player[0]) + 1
+    edited_picks = {}
+    totals = {}
+    for owner in OWNERS:
+        edited_picks[owner] = []
+        totals[owner] = 0
+        for pick in picks[owner]:
+            player_profile = get_player_profile(player_id=pick['PlayerID'], player_profiles=player_profiles)
+            standing = get_player_standing(pick['PlayerID'], leaderboard)
+            if standing is None:
+                print('Failed to find {} ({}) in leaderbaord'.format(player_profile['DraftKingsName'], pick['PlayerID']))
+            else:
+                totals[owner] += int(standing['Points'])
+                edited_picks[owner].append({
+                    'DraftKingsName': player_profile['DraftKingsName'],
+                    'Rank'          : standing['Rank'],
+                    'Points'        : standing['Points'],
+                })
 
-        response += '{},{},{},\n'.format(player[1], rank, player[2])
-
-    return response
+    return render_template('results.html', leaderboard=leaderboard, picks=edited_picks, totals=totals, owners=OWNERS)
 
 @app.route('/tournaments')
 def tournaments():
@@ -474,38 +498,162 @@ def picks():
 
     return render_template('picks.html', players=players, tournaments=relevant_tournaments, tournamentid=tournament_id, selected_string=selected_string)
 
-def sandbox():
-    create_salaries_table()
+def create_leaderboard_table():
+    conn = get_db_connection()
+    curr = conn.cursor()
+    curr.execute('DROP TABLE IF EXISTS leaderboards;')
+    curr.execute('''
+        CREATE TABLE leaderboards (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            TournamentID INTEGER NOT NULL,
+            PlayerID TEXT NOT NULL,
+            Rank TEXT NOT NULL,
+            DraftKingsPlayerID TEXT NOT NULL,
+            DraftKingsName TEXT NOT NULL,
+            Points TEXT NOT NULL
+        );
+    ''')
+    conn.commit()
+    conn.close()
 
+def update_leaderboard(tournament_id):
+    leaderboard = api_get_leaderboard(tournament_id)
     player_profiles = load_player_profiles()
-    print('hey')
-    contests = Client().contests(sport=Sport.GOLF)
+    parsed_leaderboard = parse_leaderboard(leaderboard, player_profiles)
 
-    for draft_group in contests.draft_groups:
-        draft_group_details = Client().draft_group_details(draft_group_id=draft_group.draft_group_id)
-        print(draft_group_details.games[0].name)
-        if draft_group_details.leagues[0].abbreviation == 'PGA':
-            game_type_rules = Client().game_type_rules(game_type_id=draft_group_details.contest_details.type_id)
-            if game_type_rules.salary_cap_details.is_enabled and int(game_type_rules.salary_cap_details.maximum_value) == 50000:
-                draftables = Client().draftables(draft_group_id=draft_group_details.draft_group_id)
-                for player in draftables.players:
-                    player_profile = get_player_profile(draft_kings_player_id=player.player_id, player_profiles=player_profiles)
+    conn = get_db_connection()
+    curr = conn.cursor()
 
-                    if player_profile is not None:
-                        if player.name_details.display != player_profile['DraftKingsName']:
-                            print('Player names do not match {} vs {}'.format(player.name_details.display, player_profile['DraftKingsName']))
-                        print('{}, {}, {}, {}'.format(player.player_id, player.name_details.display, player_profile['DraftKingsName'], player.salary))
-                    else:
-                        print('WTF {}'.format(player.name_details.display))
+    for player in parsed_leaderboard:
+        db_player = conn.execute('SELECT id FROM leaderboards WHERE TournamentID == ? AND PlayerID == ?', (
+            tournament_id,
+            player['PlayerID']
+        )).fetchall()
+        if len(db_player) == 0:
+            curr.execute('INSERT INTO leaderboards (TournamentID, PlayerID, Rank, DraftKingsPlayerID, DraftKingsName, Points) VALUES (?, ?, ?, ?, ?, ?)', (
+                tournament_id,
+                player['PlayerID'],
+                player['Rank'],
+                player['DraftKingsPlayerID'],
+                player['DraftKingsName'],
+                player['Points'],
+            ))
+        else:
+            curr.execute('UPDATE leaderboards SET Rank=?, Points=? WHERE TournamentID==? AND PlayerID==?', (
+                player['Rank'],
+                player['Points'],
+                tournament_id,
+                player['PlayerID'],
+            ))
 
-                    # print(player_profile)
-                    # print(dir(player))
-                    # print(player)
+    conn.commit()
+    conn.close()
 
+def get_leaderboard(tournament_id):
+    conn = get_db_connection()
+    curr = conn.cursor()
 
-                # print(game_type_rules.salary_cap_details)
-            # print(Client().game_type_rules(game_type_id=draft_group_details.contest_details.type_id))
-            # print(draft_group_details)
+    leaderboard = conn.execute('SELECT * FROM leaderboards WHERE TournamentID == ?', (
+        tournament_id,
+    )).fetchall()
+
+    conn.commit()
+    conn.close()
+
+    return leaderboard
+
+def create_picks_table():
+    # TODO: convert all appropriate table TEXTs to INTEGERs
+    conn = get_db_connection()
+    curr = conn.cursor()
+    curr.execute('DROP TABLE IF EXISTS picks;')
+    curr.execute('''
+        CREATE TABLE picks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Owner TEXT NOT NULL,
+            TournamentID INTEGER NOT NULL,
+            PlayerID INTEGER NOT NULL
+        );
+    ''')
+    conn.commit()
+    conn.close()
+
+def add_pick(owner, tournament_id, player_name):
+    conn = get_db_connection()
+    curr = conn.cursor()
+
+    # TODO: load player profiles once
+    player_profiles = load_player_profiles()
+    player_id = get_player_id_from_name(player_name, player_profiles)
+
+    if player_id is not None:
+        curr.execute('INSERT INTO picks (Owner, TournamentID, PlayerID) VALUES (?, ?, ?)', (owner, tournament_id, player_id))
+    else:
+        print('No player ID for {}. Cannot add to picks.'.format(player_name))
+
+    conn.commit()
+    conn.close()
+
+def add_picks():
+    conn = get_db_connection()
+    curr = conn.cursor()
+
+    add_pick('Ben', TOURNAMENT_ID, 'Jon Rahm')
+    add_pick('Ben', TOURNAMENT_ID, 'Tony Finau')
+    add_pick('Ben', TOURNAMENT_ID, 'Viktor Hovland')
+    add_pick('Ben', TOURNAMENT_ID, 'Carlos Ortiz')
+    add_pick('Ben', TOURNAMENT_ID, 'Talor Gooch')
+    add_pick('Ben', TOURNAMENT_ID, 'Doc Redman')
+
+    add_pick('Greg', TOURNAMENT_ID, 'Bryson DeChambeau')
+    add_pick('Greg', TOURNAMENT_ID, 'Collin Morikawa')
+    add_pick('Greg', TOURNAMENT_ID, 'Viktor Hovland')
+    add_pick('Greg', TOURNAMENT_ID, 'Max Homa')
+    add_pick('Greg', TOURNAMENT_ID, 'Cameron Champ')
+    add_pick('Greg', TOURNAMENT_ID, 'Charl Schwartzel')
+
+    add_pick('Mike', TOURNAMENT_ID, 'Viktor Hovland')
+    add_pick('Mike', TOURNAMENT_ID, 'Tony Finau')
+    add_pick('Mike', TOURNAMENT_ID, 'Jon Rahm')
+    add_pick('Mike', TOURNAMENT_ID, 'Kyoung-Hoon Lee')
+    add_pick('Mike', TOURNAMENT_ID, 'Carlos Ortiz')
+    add_pick('Mike', TOURNAMENT_ID, 'Michael Thompson')
+
+    add_pick('Don', TOURNAMENT_ID, 'Jon Rahm')
+    add_pick('Don', TOURNAMENT_ID, 'Jordan Spieth')
+    add_pick('Don', TOURNAMENT_ID, 'Cameron Smith')
+    add_pick('Don', TOURNAMENT_ID, 'Taehoon Kim')
+    add_pick('Don', TOURNAMENT_ID, 'Danny Lee')
+    add_pick('Don', TOURNAMENT_ID, 'Xander Schauffele')
+
+    add_pick('Sean', TOURNAMENT_ID, 'Dustin Johnson')
+    add_pick('Sean', TOURNAMENT_ID, 'Rory McIlroy')
+    add_pick('Sean', TOURNAMENT_ID, 'Xander Schauffele')
+    add_pick('Sean', TOURNAMENT_ID, 'Bo Hoag')
+    add_pick('Sean', TOURNAMENT_ID, 'Brian Gay')
+    add_pick('Sean', TOURNAMENT_ID, 'Danny Lee')
+
+    conn.commit()
+    conn.close()
+
+def get_picks():
+    conn = get_db_connection()
+    curr = conn.cursor()
+
+    picks = {}
+    for owner in OWNERS:
+        picks[owner] = conn.execute('SELECT * FROM picks WHERE Owner == ?', (
+            owner,
+        )).fetchall()
+
+    conn.commit()
+    conn.close()
+
+    return picks
+
+def sandbox():
+    create_picks_table()
+    add_picks()
 
 def main():
     args = parse_args()
@@ -513,20 +661,11 @@ def main():
     if args.cmd == 'fixtures':
         player_profiles = fetch_player_profiles()
 
-    elif args.cmd == 'leaderboard':
-        # player_profiles = load_player_profiles()
+    elif args.cmd == 'create-leaderboard-table':
+        create_leaderboard_table()
 
-        active_tournaments = get_active_tournaments()
-
-        if len(active_tournaments) == 0:
-            print('No active tournaments. Exiting...')
-            return
-
-        tournament = active_tournaments[0]
-
-        print(tournament['Name'])
-        leaderboard = get_leaderboard(tournament)
-        parse_leaderboard(leaderboard)
+    elif args.cmd == 'update-leaderboard':
+        update_leaderboard(TOURNAMENT_ID)
 
     elif args.cmd == 'tournaments':
         create_tournaments_table()
