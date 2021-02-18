@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% set active_page = "results" %}
+{% block title %} Live Results {% endblock %}
+
+{% block content %}
+    <h1>The Genesis Invitational</h1>
+
+    {% for owner in owners %}
+        <h2>{{ owner }}</h2>
+        <table class="table table-success table-striped">
+            <thead>
+                <tr>
+                    <th scope="col">Rank</th>
+                    <th scope="col" colspan="2">Player</th>
+                    <th scope="col">Points</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for player in picks[owner] %}
+                <tr>
+                    <th class="col-1 align-middle" scope="row">{% if player["Rank"] != "None" %}{{ player["Rank"] }}{% else %}-{% endif %}</th>
+                    <td class="col-2 align-middle"><img src="{{ player['PhotoUrl'] }}" class="figure-img img-fluid rounded" alt="..." style="height:50%;"></td>
+                    <td class="align-middle">{{ player["DraftKingsName"] }}</td>
+                    <td class="col-1 align-middle">{{ player["Points"] }}</td>
+                </tr>
+                {% endfor %}
+                <tr>
+                    <td class="align-middle" colspan="3"></td>
+                    <td class="align-middle" class=="table-secondary">{{ totals[owner] }}</td>
+                </tr>
+            </tbody>
+        </table>
+    {% endfor %}
+
+    <h2>Leaderboard</h2>
+    <table class="table table-success table-striped">
+        <thead>
+            <tr>
+                <th scope="col">Rank</th>
+                <th scope="col">Player</th>
+                <th scope="col">Points</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for player in leaderboard %}
+            <tr>
+                <th class="align-middle" scope="row">{% if player["Rank"] != "None" %}{{ player["Rank"] }}{% else %}-{% endif %}</th>
+                <td class="align-middle">{{ player["DraftKingsName"] }}</td>
+                <td class="align-middle">{{ player["Points"] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+{% endblock %}

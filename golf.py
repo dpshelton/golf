@@ -150,29 +150,48 @@ def get_points(rank):
 def parse_leaderboard(leaderboard, player_profiles):
     # Unscramble the 'Rank' from fantasydata.com
     prev_rank = None
-    parsed_leaderboard = []
+    ranked_leaderboard = []
+    unranked_leaderboard = []
     rank = None
     # Assigning rank starting at 1 (instead of 0)
-    for i, player in enumerate(leaderboard['Players']):
-        if player['Rank'] is None:
-            rank = None
-        elif prev_rank is None:
-            rank = 1
-        elif player['Rank'] != prev_rank:
-            rank = len(parsed_leaderboard) + 1
 
+    ranked_player_count = 0
+    last_scrambled_rank = None
+    current_rank = 1
+
+    for i, player in enumerate(leaderboard['Players']):
         player_profile = get_player_profile(player_id=player['PlayerID'], player_profiles=player_profiles)
-        parsed_leaderboard.append({
-            'PlayerID'          : player['PlayerID'],
-            'Rank'              : str(rank),
-            'DraftKingsPlayerID': player_profile['DraftKingsPlayerID'],
-            'DraftKingsName'    : player_profile['DraftKingsName'],
-            'Points'            : str(get_points(rank)),
-        })
+
+        if player['Rank'] is not None:
+            ranked_player_count += 1
+
+            if player['Rank'] != last_scrambled_rank:
+                current_rank = ranked_player_count
+
+            rank = current_rank
+            last_scrambled_rank = player['Rank']
+
+            ranked_leaderboard.append({
+                'PlayerID'          : player['PlayerID'],
+                'Rank'              : str(rank),
+                'DraftKingsPlayerID': player_profile['DraftKingsPlayerID'],
+                'DraftKingsName'    : player_profile['DraftKingsName'],
+                'Points'            : str(get_points(rank)),
+            })
+        else:
+            rank = None
+
+            unranked_leaderboard.append({
+                'PlayerID'          : player['PlayerID'],
+                'Rank'              : str(rank),
+                'DraftKingsPlayerID': player_profile['DraftKingsPlayerID'],
+                'DraftKingsName'    : player_profile['DraftKingsName'],
+                'Points'            : str(get_points(rank)),
+            })
 
         prev_rank = player['Rank']
 
-    return parsed_leaderboard
+    return ranked_leaderboard + unranked_leaderboard
 
 def fetch_player_profiles():
     player_profiles = api_get_all_players()
@@ -448,6 +467,7 @@ def results():
                     'DraftKingsName': player_profile['DraftKingsName'],
                     'Rank'          : standing['Rank'],
                     'Points'        : standing['Points'],
+                    'PhotoUrl'      : player_profile['PhotoUrl'],
                 })
 
     return render_template('results.html', leaderboard=leaderboard, picks=edited_picks, totals=totals, owners=OWNERS)
@@ -510,7 +530,8 @@ def create_leaderboard_table():
             Rank TEXT NOT NULL,
             DraftKingsPlayerID TEXT NOT NULL,
             DraftKingsName TEXT NOT NULL,
-            Points TEXT NOT NULL
+            Points TEXT NOT NULL,
+            Position INTEGER NOT NULL
         );
     ''')
     conn.commit()
@@ -524,24 +545,26 @@ def update_leaderboard(tournament_id):
     conn = get_db_connection()
     curr = conn.cursor()
 
-    for player in parsed_leaderboard:
+    for position, player in enumerate(parsed_leaderboard):
         db_player = conn.execute('SELECT id FROM leaderboards WHERE TournamentID == ? AND PlayerID == ?', (
             tournament_id,
             player['PlayerID']
         )).fetchall()
         if len(db_player) == 0:
-            curr.execute('INSERT INTO leaderboards (TournamentID, PlayerID, Rank, DraftKingsPlayerID, DraftKingsName, Points) VALUES (?, ?, ?, ?, ?, ?)', (
+            curr.execute('INSERT INTO leaderboards (TournamentID, PlayerID, Rank, DraftKingsPlayerID, DraftKingsName, Points, Position) VALUES (?, ?, ?, ?, ?, ?, ?)', (
                 tournament_id,
                 player['PlayerID'],
                 player['Rank'],
                 player['DraftKingsPlayerID'],
                 player['DraftKingsName'],
                 player['Points'],
+                position,
             ))
         else:
-            curr.execute('UPDATE leaderboards SET Rank=?, Points=? WHERE TournamentID==? AND PlayerID==?', (
+            curr.execute('UPDATE leaderboards SET Rank=?, Points=?, Position=? WHERE TournamentID==? AND PlayerID==?', (
                 player['Rank'],
                 player['Points'],
+                position,
                 tournament_id,
                 player['PlayerID'],
             ))
@@ -553,7 +576,7 @@ def get_leaderboard(tournament_id):
     conn = get_db_connection()
     curr = conn.cursor()
 
-    leaderboard = conn.execute('SELECT * FROM leaderboards WHERE TournamentID == ?', (
+    leaderboard = conn.execute('SELECT * FROM leaderboards WHERE TournamentID == ? ORDER BY Position', (
         tournament_id,
     )).fetchall()
 
@@ -652,8 +675,10 @@ def get_picks():
     return picks
 
 def sandbox():
-    create_picks_table()
-    add_picks()
+    create_leaderboard_table()
+    update_leaderboard(TOURNAMENT_ID)
+    # create_picks_table()
+    # add_picks()
 
 def main():
     args = parse_args()
