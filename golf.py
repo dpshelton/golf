@@ -101,9 +101,6 @@ def get_active_tournaments():
 
     return active_tournaments
 
-def get_leaderboard(tournament):
-    return api_get_leaderboard(tournament['TournamentID'])
-
 def get_next_tournament():
     tournaments = api_get_all_tournaments()
 
@@ -225,7 +222,8 @@ def create_tournaments_table():
             StartDate TEXT NOT NULL,
             EndDate TEXT NOT NULL,
             Location TEXT,
-            Venue TEXT
+            Venue TEXT,
+            LeaderboardLastUpdated TEXT
         );
     ''')
     conn.commit()
@@ -446,7 +444,7 @@ def results():
     # tournament_id = request.args.get('tournamentid')
     tournament_id = TOURNAMENT_ID  # TODO: switch back to dropdown
 
-    leaderboard = get_leaderboard(tournament_id)
+    leaderboard, last_updated = get_leaderboard(tournament_id)
 
     player_profiles = load_player_profiles()
     picks = get_picks()
@@ -470,7 +468,7 @@ def results():
                     'PhotoUrl'      : player_profile['PhotoUrl'],
                 })
 
-    return render_template('results.html', leaderboard=leaderboard, picks=edited_picks, totals=totals, owners=OWNERS)
+    return render_template('results.html', leaderboard=leaderboard, picks=edited_picks, totals=totals, owners=OWNERS, last_updated=last_updated)
 
 @app.route('/tournaments')
 def tournaments():
@@ -569,6 +567,11 @@ def update_leaderboard(tournament_id):
                 player['PlayerID'],
             ))
 
+    curr.execute('UPDATE tournaments SET LeaderboardLastUpdated=? WHERE TournamentID=?', (
+        datetime.now(),
+        tournament_id,
+    ))
+
     conn.commit()
     conn.close()
 
@@ -580,10 +583,14 @@ def get_leaderboard(tournament_id):
         tournament_id,
     )).fetchall()
 
+    last_updated = conn.execute('SELECT strftime("%Y-%m-%d %H:%M:%S", "LeaderboardLastUpdated") as LeaderboardLastUpdated FROM tournaments WHERE TournamentID == ?', (
+        tournament_id,
+    )).fetchall()[0]
+
     conn.commit()
     conn.close()
 
-    return leaderboard
+    return leaderboard, last_updated
 
 def create_picks_table():
     # TODO: convert all appropriate table TEXTs to INTEGERs
