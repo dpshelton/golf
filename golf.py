@@ -66,6 +66,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description=description, formatter_class=argparse.RawTextHelpFormatter)
 
     parser.add_argument('cmd', help='Directory path', type=str, choices=CMDS)
+    parser.add_argument('-r', '--round-num', help='Round number', type=int, default=1)
 
     return parser.parse_args()
 
@@ -683,6 +684,39 @@ def get_picks():
 
     return picks
 
+def convert_tee_time(tee_time):
+    if tee_time is not None:
+        # Tee times are EST
+        tee_time = datetime.fromisoformat(tee_time) - timedelta(hours=3)
+
+    return tee_time
+
+def get_first_tee_time(leaderboard, round_num):
+    first_tee_time = None
+    for player in leaderboard['Players']:
+        if len(player['Rounds']) >= round_num:
+            tee_time = convert_tee_time(player['Rounds'][round_num-1]['TeeTime'])
+            if tee_time is not None:
+                if first_tee_time is None:
+                    first_tee_time = tee_time
+                elif tee_time < first_tee_time:
+                        first_tee_time = tee_time
+
+    return first_tee_time
+
+def get_last_tee_time(leaderboard, round_num):
+    last_tee_time = None
+    for player in leaderboard['Players']:
+        if len(player['Rounds']) >= round_num:
+            tee_time = convert_tee_time(player['Rounds'][round_num-1]['TeeTime'])
+            if tee_time is not None:
+                if last_tee_time is None:
+                    last_tee_time = tee_time
+                elif tee_time > last_tee_time:
+                        last_tee_time = tee_time
+
+    return last_tee_time
+
 def manage_leaderboard(tournament_id, starting_round_num=1):
     round_num = starting_round_num
 
@@ -700,8 +734,19 @@ def manage_leaderboard(tournament_id, starting_round_num=1):
         wait_for_round_start(leaderboard, round_num)
 
         round_complete = True
-        for player in leaderboard['Players']:
-            if player['TotalThrough'] is not None:
+        last_tee_time = get_last_tee_time(leaderboard, round_num)
+        now = datetime.now()
+        if last_tee_time is not None and last_tee_time > now:
+            print('Now: {}, Last Tee Time: {}. Last tee time not reached.'.format(now.strftime("%Y-%m-%d %H:%M:%S"), last_tee_time))
+            round_complete = False
+        else:
+            players_remaining = 0
+            for player in leaderboard['Players']:
+                if player['TotalThrough'] is not None:
+                    players_remaining += 1
+
+            if players_remaining > 0:
+                print('Waiting for {} players to complete round.'.format(players_remaining))
                 round_complete = False
 
         if round_complete:
@@ -712,25 +757,17 @@ def manage_leaderboard(tournament_id, starting_round_num=1):
             time.sleep(LEADERBOARD_UPDATE_PERIOD)
 
 def wait_for_round_start(leaderboard, round_num):
-    first_tee_time = None
-    for player in leaderboard['Players']:
-        if len(player['Rounds']) >= round_num:
-            tee_time = player['Rounds'][round_num-1]['TeeTime']
-            if tee_time is not None:
-                # Tee times are EST
-                tee_time = datetime.fromisoformat(tee_time) - timedelta(hours=3)
-                if first_tee_time is None:
-                    first_tee_time = tee_time
-                else:
-                    if tee_time < first_tee_time:
-                        first_tee_time = tee_time
+    first_tee_time = get_first_tee_time(leaderboard, round_num)
 
-    now = datetime.now()
-    if now < first_tee_time:
-        sleep_timedelta = first_tee_time - now
-        sleep_seconds = int(sleep_timedelta.total_seconds())
-        print('Currently: {}, First Tee Time: {}. Sleeping for {} seconds...'.format(now.strftime("%Y-%m-%d %H:%M:%S"), first_tee_time, sleep_seconds))
-        time.sleep(sleep_seconds)
+    if first_tee_time is None:
+        print('Tee times are not posted for round {}!'.format(round_num))
+    else:
+        now = datetime.now()
+        if now < first_tee_time:
+            sleep_timedelta = first_tee_time - now
+            sleep_seconds = int(sleep_timedelta.total_seconds())
+            print('Now: {}, First Tee Time: {}. Sleeping for {} seconds...'.format(now.strftime("%Y-%m-%d %H:%M:%S"), first_tee_time, sleep_seconds))
+            time.sleep(sleep_seconds)
 
 def sandbox():
     # create_leaderboard_table()
@@ -746,7 +783,7 @@ def sandbox():
     # leaderboard = api_get_leaderboard(TOURNAMENT_ID)
     # wait_for_round_start(leaderboard=leaderboard, round_num=3)
 
-    manage_leaderboard(TOURNAMENT_ID)
+    manage_leaderboard(TOURNAMENT_ID, starting_round_num=3)
 
 def main():
     args = parse_args()
@@ -758,7 +795,7 @@ def main():
         create_leaderboard_table()
 
     elif args.cmd == 'manage-leaderboard':
-        manage_leaderboard(TOURNAMENT_ID)
+        manage_leaderboard(TOURNAMENT_ID, args.round_num)
 
     elif args.cmd == 'update-leaderboard':
         update_leaderboard(TOURNAMENT_ID)
