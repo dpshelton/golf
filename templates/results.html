@@ -6,6 +6,26 @@
     <h1>The Genesis Invitational</h1>
     <h6>Updated {{ last_updated['LeaderboardLastUpdated'] }}</h6>
 
+    <h2>Standings</h2>
+    <table class="table table-success table-striped table-sm">
+        <thead>
+            <tr>
+                <th scope="col">Rank</th>
+                <th scope="col">Owner</th>
+                <th scope="col">Points</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for owner, points in totals.items() %}
+                <tr>
+                    <th class="col-1 align-middle" scope="row">{{ loop.index }}</th>
+                    <td class="align-middle">{{ owner }}</td>
+                    <td class="col-1 align-middle">{{ points }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
     {% for owner in owners %}
         <h2>{{ owner }}</h2>
         <table class="table table-success table-striped table-sm">
@@ -20,13 +40,14 @@
                 {% for player in picks[owner] %}
                 <tr>
                     <th class="col-1 align-middle" scope="row">{% if player["Rank"] != "None" %}{{ player["Rank"] }}{% else %}-{% endif %}</th>
-                    <td class="col-2 align-middle"><img src="{{ player['PhotoUrl'] }}" class="figure-img img-fluid rounded" alt="..." style="height:45px;"></td>
+                    <td class="col-2 align-middle"><img src="{{ player['PhotoUrl'] }}" class="figure-img img-fluid rounded" alt="..." style="height:45px; margin:0"></td>
                     <td class="align-middle">{{ player["DraftKingsName"] }}</td>
                     <td class="col-1 align-middle">{% if player["Rank"] != "None" %}{{ player["Points"] }}{% else %}-{% endif %}</td>
                 </tr>
                 {% endfor %}
                 <tr>
-                    <td class="align-middle" colspan="3"></td>
+                    <td class="align-middle" colspan="2"></td>
+                    <td class="align-middle">Total</td>
                     <td class="align-middle" class=="table-secondary">{{ totals[owner] }}</td>
                 </tr>
             </tbody>
@@ -45,9 +66,9 @@
         <tbody>
             {% for player in leaderboard %}
             <tr>
-                <th class="align-middle" scope="row">{% if player["Rank"] != "None" %}{{ player["Rank"] }}{% else %}-{% endif %}</th>
+                <th class="col-1 align-middle" scope="row">{% if player["Rank"] != "None" %}{{ player["Rank"] }}{% else %}-{% endif %}</th>
                 <td class="align-middle">{{ player["DraftKingsName"] }}</td>
-                <td class="align-middle">{% if player["Rank"] != "None" %}{{ player["Points"] }}{% else %}-{% endif %}</td>
+                <td class="col-1 align-middle">{% if player["Rank"] != "None" %}{{ player["Points"] }}{% else %}-{% endif %}</td>
             </tr>
             {% endfor %}
         </tbody>

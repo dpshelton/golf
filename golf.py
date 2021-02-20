@@ -19,9 +19,11 @@ KEY = 'a478d29a98e54eac8e9ebf1f218dd0b8'
 START_DAY_WINDOW    = 4
 END_DAY_WINDOW      = 1
 PLAYERS_FILENAME    = 'player_profiles.json'
+LEADERBOARD_UPDATE_PERIOD = 15 * 60
 
 CMDS = [
     'fixtures',
+    'manage-leaderboard',
     'update-leaderboard',
     'create-leaderboard-table',
     'tournaments',
@@ -146,27 +148,26 @@ def get_points(rank):
 
 def parse_leaderboard(leaderboard, player_profiles):
     # Unscramble the 'Rank' from fantasydata.com
-    prev_rank = None
     ranked_leaderboard = []
     unranked_leaderboard = []
     rank = None
     # Assigning rank starting at 1 (instead of 0)
 
     ranked_player_count = 0
-    last_scrambled_rank = None
+    prev_total_score = None
     current_rank = 1
 
     for i, player in enumerate(leaderboard['Players']):
         player_profile = get_player_profile(player_id=player['PlayerID'], player_profiles=player_profiles)
 
-        if player['Rank'] is not None:
+        if player['TotalScore'] is not None:
             ranked_player_count += 1
 
-            if player['Rank'] != last_scrambled_rank:
+            if player['TotalScore'] != prev_total_score:
                 current_rank = ranked_player_count
 
             rank = current_rank
-            last_scrambled_rank = player['Rank']
+            prev_total_score = player['TotalScore']
 
             ranked_leaderboard.append({
                 'PlayerID'          : player['PlayerID'],
@@ -185,8 +186,6 @@ def parse_leaderboard(leaderboard, player_profiles):
                 'DraftKingsName'    : player_profile['DraftKingsName'],
                 'Points'            : str(get_points(rank)),
             })
-
-        prev_rank = player['Rank']
 
     return ranked_leaderboard + unranked_leaderboard
 
@@ -468,6 +467,8 @@ def results():
                     'PhotoUrl'      : player_profile['PhotoUrl'],
                 })
 
+    totals = dict(sorted(totals.items(), key=lambda item: item[1], reverse=True))
+
     return render_template('results.html', leaderboard=leaderboard, picks=edited_picks, totals=totals, owners=OWNERS, last_updated=last_updated)
 
 @app.route('/tournaments')
@@ -535,8 +536,9 @@ def create_leaderboard_table():
     conn.commit()
     conn.close()
 
-def update_leaderboard(tournament_id):
-    leaderboard = api_get_leaderboard(tournament_id)
+def update_leaderboard(tournament_id, leaderboard=None):
+    if leaderboard is None:
+        leaderboard = api_get_leaderboard(tournament_id)
     player_profiles = load_player_profiles()
     parsed_leaderboard = parse_leaderboard(leaderboard, player_profiles)
 
@@ -681,11 +683,70 @@ def get_picks():
 
     return picks
 
+def manage_leaderboard(tournament_id, starting_round_num=1):
+    round_num = starting_round_num
+
+    first_iteration = True
+    leaderboard = api_get_leaderboard(tournament_id)
+    num_rounds = len(leaderboard['Tournament']['Rounds'])
+
+    while round_num <= num_rounds:
+        if first_iteration:
+            first_iteration = False
+        else:
+            leaderboard = api_get_leaderboard(tournament_id)
+        update_leaderboard(tournament_id, leaderboard)
+
+        wait_for_round_start(leaderboard, round_num)
+
+        round_complete = True
+        for player in leaderboard['Players']:
+            if player['TotalThrough'] is not None:
+                round_complete = False
+
+        if round_complete:
+            print('Round {} is over.'.format(round_num))
+            round_num += 1
+        else:
+            print('Sleeping for {} seconds'.format(LEADERBOARD_UPDATE_PERIOD))
+            time.sleep(LEADERBOARD_UPDATE_PERIOD)
+
+def wait_for_round_start(leaderboard, round_num):
+    first_tee_time = None
+    for player in leaderboard['Players']:
+        if len(player['Rounds']) >= round_num:
+            tee_time = player['Rounds'][round_num-1]['TeeTime']
+            if tee_time is not None:
+                # Tee times are EST
+                tee_time = datetime.fromisoformat(tee_time) - timedelta(hours=3)
+                if first_tee_time is None:
+                    first_tee_time = tee_time
+                else:
+                    if tee_time < first_tee_time:
+                        first_tee_time = tee_time
+
+    now = datetime.now()
+    if now < first_tee_time:
+        sleep_timedelta = first_tee_time - now
+        sleep_seconds = int(sleep_timedelta.total_seconds())
+        print('Currently: {}, First Tee Time: {}. Sleeping for {} seconds...'.format(now.strftime("%Y-%m-%d %H:%M:%S"), first_tee_time, sleep_seconds))
+        time.sleep(sleep_seconds)
+
 def sandbox():
     # create_leaderboard_table()
     # update_leaderboard(TOURNAMENT_ID)
-    create_picks_table()
-    add_picks()
+
+    # create_picks_table()
+    # add_picks()
+
+    # pprint(api_get_all_tournaments())
+
+    # pprint(api_get_leaderboard(TOURNAMENT_ID))
+
+    # leaderboard = api_get_leaderboard(TOURNAMENT_ID)
+    # wait_for_round_start(leaderboard=leaderboard, round_num=3)
+
+    manage_leaderboard(TOURNAMENT_ID)
 
 def main():
     args = parse_args()
@@ -695,6 +756,9 @@ def main():
 
     elif args.cmd == 'create-leaderboard-table':
         create_leaderboard_table()
+
+    elif args.cmd == 'manage-leaderboard':
+        manage_leaderboard(TOURNAMENT_ID)
 
     elif args.cmd == 'update-leaderboard':
         update_leaderboard(TOURNAMENT_ID)
