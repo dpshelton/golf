@@ -12,7 +12,7 @@ import sqlite3
 from flask import Flask, escape, request, render_template
 from draft_kings import Sport, Client
 
-TOURNAMENT_ID = 425
+TOURNAMENT_ID = 427
 
 KEY = 'a478d29a98e54eac8e9ebf1f218dd0b8'
 
@@ -444,6 +444,10 @@ def results():
     # tournament_id = request.args.get('tournamentid')
     tournament_id = TOURNAMENT_ID  # TODO: switch back to dropdown
 
+    tournament = get_tournament_from_id(tournament_id)
+    if tournament is None:
+        return
+
     leaderboard, last_updated = get_leaderboard(tournament_id)
 
     player_profiles = load_player_profiles()
@@ -466,11 +470,12 @@ def results():
                     'Rank'          : standing['Rank'],
                     'Points'        : standing['Points'],
                     'PhotoUrl'      : player_profile['PhotoUrl'],
+                    'OneAndDone'    : pick['OneAndDone'],
                 })
 
     totals = dict(sorted(totals.items(), key=lambda item: item[1], reverse=True))
 
-    return render_template('results.html', leaderboard=leaderboard, picks=edited_picks, totals=totals, owners=OWNERS, last_updated=last_updated)
+    return render_template('results.html', leaderboard=leaderboard, picks=edited_picks, totals=totals, owners=OWNERS, last_updated=last_updated, tournament=tournament)
 
 @app.route('/tournaments')
 def tournaments():
@@ -605,13 +610,14 @@ def create_picks_table():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             Owner TEXT NOT NULL,
             TournamentID INTEGER NOT NULL,
-            PlayerID INTEGER NOT NULL
+            PlayerID INTEGER NOT NULL,
+            OneAndDone INTEGER NOT NULL
         );
     ''')
     conn.commit()
     conn.close()
 
-def add_pick(owner, tournament_id, player_name):
+def add_pick(owner, tournament_id, player_name, one_and_done=False):
     conn = get_db_connection()
     curr = conn.cursor()
 
@@ -620,7 +626,7 @@ def add_pick(owner, tournament_id, player_name):
     player_id = get_player_id_from_name(player_name, player_profiles)
 
     if player_id is not None:
-        curr.execute('INSERT INTO picks (Owner, TournamentID, PlayerID) VALUES (?, ?, ?)', (owner, tournament_id, player_id))
+        curr.execute('INSERT INTO picks (Owner, TournamentID, PlayerID, OneAndDone) VALUES (?, ?, ?, ?)', (owner, tournament_id, player_id, one_and_done))
     else:
         print('No player ID for {}. Cannot add to picks.'.format(player_name))
 
@@ -631,40 +637,47 @@ def add_picks():
     conn = get_db_connection()
     curr = conn.cursor()
 
-    add_pick('Ben', TOURNAMENT_ID, 'Jon Rahm')
+    add_pick('Ben', TOURNAMENT_ID, 'Xander Schauffele')
+    add_pick('Ben', TOURNAMENT_ID, 'Justin Thomas')
     add_pick('Ben', TOURNAMENT_ID, 'Tony Finau')
-    add_pick('Ben', TOURNAMENT_ID, 'Viktor Hovland')
-    add_pick('Ben', TOURNAMENT_ID, 'Carlos Ortiz')
-    add_pick('Ben', TOURNAMENT_ID, 'Talor Gooch')
-    add_pick('Ben', TOURNAMENT_ID, 'Doc Redman')
+    add_pick('Ben', TOURNAMENT_ID, 'Brendon Todd')
+    add_pick('Ben', TOURNAMENT_ID, 'Cameron Champ')
+    add_pick('Ben', TOURNAMENT_ID, 'David Lipsky')
 
-    add_pick('Greg', TOURNAMENT_ID, 'Bryson DeChambeau')
-    add_pick('Greg', TOURNAMENT_ID, 'Collin Morikawa')
-    add_pick('Greg', TOURNAMENT_ID, 'Viktor Hovland')
-    add_pick('Greg', TOURNAMENT_ID, 'Max Homa')
-    add_pick('Greg', TOURNAMENT_ID, 'Doug Ghim')
-    add_pick('Greg', TOURNAMENT_ID, 'Charl Schwartzel')
+    add_pick('Greg', TOURNAMENT_ID, 'Justin Thomas')
+    add_pick('Greg', TOURNAMENT_ID, 'Daniel Berger')
+    add_pick('Greg', TOURNAMENT_ID, 'Scottie Scheffler')
+    add_pick('Greg', TOURNAMENT_ID, 'Jason Day')
+    add_pick('Greg', TOURNAMENT_ID, 'Ryan Palmer')
+    add_pick('Greg', TOURNAMENT_ID, 'Gary Woodland')
 
+    add_pick('Mike', TOURNAMENT_ID, 'Ryan Palmer')
+    add_pick('Mike', TOURNAMENT_ID, 'Lanto Griffin')
+    add_pick('Mike', TOURNAMENT_ID, 'Will Zalatoris')
+    add_pick('Mike', TOURNAMENT_ID, 'Cameron Smith')
     add_pick('Mike', TOURNAMENT_ID, 'Viktor Hovland')
-    add_pick('Mike', TOURNAMENT_ID, 'Tony Finau')
-    add_pick('Mike', TOURNAMENT_ID, 'Jon Rahm')
-    add_pick('Mike', TOURNAMENT_ID, 'Kyoung-Hoon Lee')
-    add_pick('Mike', TOURNAMENT_ID, 'Carlos Ortiz')
-    add_pick('Mike', TOURNAMENT_ID, 'Michael Thompson')
+    add_pick('Mike', TOURNAMENT_ID, 'Bryson DeChambeau')
 
-    add_pick('Don', TOURNAMENT_ID, 'Jon Rahm')
-    add_pick('Don', TOURNAMENT_ID, 'Jordan Spieth')
-    add_pick('Don', TOURNAMENT_ID, 'Cameron Smith')
-    add_pick('Don', TOURNAMENT_ID, 'Taehoon Kim')
-    add_pick('Don', TOURNAMENT_ID, 'Danny Lee')
-    add_pick('Don', TOURNAMENT_ID, 'Xander Schauffele')
+    add_pick('Don', TOURNAMENT_ID, 'Justin Thomas')
+    add_pick('Don', TOURNAMENT_ID, 'Patrick Reed')
+    add_pick('Don', TOURNAMENT_ID, 'Daniel Berger')
+    add_pick('Don', TOURNAMENT_ID, 'Jason Day')
+    add_pick('Don', TOURNAMENT_ID, 'Billy Horschel')
+    add_pick('Don', TOURNAMENT_ID, 'Lucas Herbert')
 
+    add_pick('Sean', TOURNAMENT_ID, 'Patrick Reed')
     add_pick('Sean', TOURNAMENT_ID, 'Dustin Johnson')
-    add_pick('Sean', TOURNAMENT_ID, 'Rory McIlroy')
-    add_pick('Sean', TOURNAMENT_ID, 'Xander Schauffele')
-    add_pick('Sean', TOURNAMENT_ID, 'Bo Hoag')
-    add_pick('Sean', TOURNAMENT_ID, 'Brian Gay')
-    add_pick('Sean', TOURNAMENT_ID, 'Danny Lee')
+    add_pick('Sean', TOURNAMENT_ID, 'Jon Rahm')
+    add_pick('Sean', TOURNAMENT_ID, 'Sami Valimaki')
+    add_pick('Sean', TOURNAMENT_ID, 'Trevor Simsby')
+    add_pick('Sean', TOURNAMENT_ID, 'Wade Ormsby')
+
+    # One and Dones
+    # add_pick('Ben',  TOURNAMENT_ID, '', True)
+    add_pick('Greg', TOURNAMENT_ID, 'Patrick Cantlay', True)
+    add_pick('Mike', TOURNAMENT_ID, 'Tyrrell Hatton', True)
+    add_pick('Don',  TOURNAMENT_ID, 'Patrick Reed', True)
+    add_pick('Sean', TOURNAMENT_ID, 'Patrick Cantlay', True)
 
     conn.commit()
     conn.close()
@@ -773,8 +786,8 @@ def sandbox():
     # create_leaderboard_table()
     # update_leaderboard(TOURNAMENT_ID)
 
-    # create_picks_table()
-    # add_picks()
+    create_picks_table()
+    add_picks()
 
     # pprint(api_get_all_tournaments())
 
@@ -783,7 +796,7 @@ def sandbox():
     # leaderboard = api_get_leaderboard(TOURNAMENT_ID)
     # wait_for_round_start(leaderboard=leaderboard, round_num=3)
 
-    manage_leaderboard(TOURNAMENT_ID, starting_round_num=3)
+    # manage_leaderboard(TOURNAMENT_ID, starting_round_num=3)
 
 def main():
     args = parse_args()

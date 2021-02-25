@@ -3,7 +3,7 @@
 {% block title %} Live Results {% endblock %}
 
 {% block content %}
-    <h1>The Genesis Invitational</h1>
+    <h1>{{ tournament['Name'] }}</h1>
     <h6>Updated {{ last_updated['LeaderboardLastUpdated'] }}</h6>
 
     <h2>Standings</h2>
@@ -41,7 +41,7 @@
                 <tr>
                     <th class="col-1 align-middle" scope="row">{% if player["Rank"] != "None" %}{{ player["Rank"] }}{% else %}-{% endif %}</th>
                     <td class="col-2 align-middle"><img src="{{ player['PhotoUrl'] }}" class="figure-img img-fluid rounded" alt="..." style="height:45px; margin:0"></td>
-                    <td class="align-middle">{{ player["DraftKingsName"] }}</td>
+                    <td class="align-middle">{{ player["DraftKingsName"] }}{% if player["OneAndDone"] %} (One-N-Done){% endif %}</td>
                     <td class="col-1 align-middle">{% if player["Rank"] != "None" %}{{ player["Points"] }}{% else %}-{% endif %}</td>
                 </tr>
                 {% endfor %}
