@@ -27,6 +27,7 @@ CMDS = [
     'update-leaderboard',
     'create-leaderboard-table',
     'tournaments',
+    'picks',
     'sandbox',
     'flask',
 ]
@@ -58,6 +59,8 @@ OWNERS = [
     'Sean',
 ]
 
+BASE_URL = 'https://fly.sportsdata.io'
+
 app = Flask(__name__)
 
 def parse_args():
@@ -80,19 +83,19 @@ def api_request(url):
 
 def api_get_all_players():
     print('API-CALL: {}'.format(inspect.currentframe().f_code.co_name))
-    return api_request('https://api.sportsdata.io/golf/v2/json/Players')
+    return api_request(BASE_URL + '/golf/v2/json/Players')
 
 def api_get_all_tournaments():
     print('API-CALL: {}'.format(inspect.currentframe().f_code.co_name))
-    return api_request('https://api.sportsdata.io/golf/v2/json/Tournaments')
+    return api_request(BASE_URL + '/golf/v2/json/Tournaments')
 
 def api_get_leaderboard(tournament_id):
     print('API-CALL: {}'.format(inspect.currentframe().f_code.co_name))
-    return api_request('https://api.sportsdata.io/golf/v2/json/Leaderboard/{}'.format(tournament_id))
+    return api_request(BASE_URL + '/golf/v2/json/Leaderboard/{}'.format(tournament_id))
 
 def api_get_projections(tournament_id):
     print('API-CALL: {}'.format(inspect.currentframe().f_code.co_name))
-    return api_request('https://api.sportsdata.io/golf/v2/json/PlayerTournamentProjectionStats/{}'.format(tournament_id))
+    return api_request(BASE_URL + '/golf/v2/json/PlayerTournamentProjectionStats/{}'.format(tournament_id))
 
 def get_active_tournaments():
     active_tournaments = []
@@ -673,11 +676,11 @@ def add_picks():
     add_pick('Sean', TOURNAMENT_ID, 'Wade Ormsby')
 
     # One and Dones
-    add_pick('Ben',  TOURNAMENT_ID, '', True)
-    add_pick('Greg', TOURNAMENT_ID, 'Patrick Cantlay', True)
+    add_pick('Ben',  TOURNAMENT_ID, 'Patrick Cantlay', True)
+    add_pick('Greg', TOURNAMENT_ID, 'Ryan Palmer', True)
     add_pick('Mike', TOURNAMENT_ID, 'Tyrrell Hatton', True)
     add_pick('Don',  TOURNAMENT_ID, 'Patrick Reed', True)
-    add_pick('Sean', TOURNAMENT_ID, 'Patrick Cantlay', True)
+    add_pick('Sean', TOURNAMENT_ID, 'Tommy Fleetwood', True)
 
     conn.commit()
     conn.close()
@@ -786,8 +789,8 @@ def sandbox():
     # create_leaderboard_table()
     # update_leaderboard(TOURNAMENT_ID)
 
-    create_picks_table()
-    add_picks()
+    # create_picks_table()
+    # add_picks()
 
     # pprint(api_get_all_tournaments())
 
@@ -797,6 +800,8 @@ def sandbox():
     # wait_for_round_start(leaderboard=leaderboard, round_num=3)
 
     # manage_leaderboard(TOURNAMENT_ID, starting_round_num=3)
+
+    pass
 
 def main():
     args = parse_args()
@@ -816,6 +821,10 @@ def main():
     elif args.cmd == 'tournaments':
         create_tournaments_table()
         populate_tournaments_table()
+
+    elif args.cmd == 'picks':
+        create_picks_table()
+        add_picks()
 
     elif args.cmd == 'flask':
         app.run(host='0.0.0.0', port=80, debug=True)
