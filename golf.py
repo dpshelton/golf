@@ -673,7 +673,7 @@ def add_picks():
     add_pick('Sean', TOURNAMENT_ID, 'Wade Ormsby')
 
     # One and Dones
-    # add_pick('Ben',  TOURNAMENT_ID, '', True)
+    add_pick('Ben',  TOURNAMENT_ID, '', True)
     add_pick('Greg', TOURNAMENT_ID, 'Patrick Cantlay', True)
     add_pick('Mike', TOURNAMENT_ID, 'Tyrrell Hatton', True)
     add_pick('Don',  TOURNAMENT_ID, 'Patrick Reed', True)
