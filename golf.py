@@ -34,21 +34,34 @@ CMDS = [
 
 POINTS = [
     (1 , 1   , 100),
-    (2 , 2   , 75),
-    (3 , 3   , 50),
-    (4 , 4   , 30),
-    (5 , 5   , 25),
-    (6 , 6   , 20),
-    (7 , 7   , 18),
-    (8 , 8   , 16),
-    (9 , 9   , 14),
-    (10, 10  , 12),
-    (11, 15  , 10),
-    (16, 20  ,  8),
-    (21, 30  ,  6),
-    (31, 40  ,  5),
-    (41, 50  ,  3),
-    (51, 1000,  1),
+    (2 , 2   ,  75),
+    (3 , 3   ,  50),
+    (4 , 4   ,  30),
+    (5 , 5   ,  25),
+    (6 , 6   ,  20),
+    (7 , 7   ,  18),
+    (8 , 8   ,  16),
+    (9 , 9   ,  14),
+    (10, 10  ,  12),
+    (11, 15  ,  10),
+    (16, 20  ,   8),
+    (21, 30  ,   6),
+    (31, 40  ,   5),
+    (41, 50  ,   3),
+    (51, 1000,   1),
+]
+
+ONE_N_DONE_POINTS = [
+    (1 , 1   , 100),
+    (2 , 2   ,  50),
+    (3 , 3   ,  30),
+    (4 , 4   ,  25),
+    (5 , 5   ,  20),
+    (6 , 6   ,  15),
+    (7 , 7   ,  12),
+    (8 , 8   ,  10),
+    (9 , 9   ,   8),
+    (10, 10  ,   5),
 ]
 
 OWNERS = [
@@ -140,13 +153,18 @@ def get_player_id_from_name(player_name, player_profiles):
 
     return None
 
-def get_points(rank):
+def get_points(rank, one_n_done=False):
     if rank is None:
         return 0
     else:
-        for start, end, points in POINTS:
-            if rank >= start and rank <= end:
-                return points
+        if one_n_done:
+            for start, end, points in ONE_N_DONE_POINTS:
+                if rank >= start and rank <= end:
+                    return points
+        else:
+            for start, end, points in POINTS:
+                if rank >= start and rank <= end:
+                    return points
 
     return 0
 
@@ -179,6 +197,7 @@ def parse_leaderboard(leaderboard, player_profiles):
                 'DraftKingsPlayerID': player_profile['DraftKingsPlayerID'],
                 'DraftKingsName'    : player_profile['DraftKingsName'],
                 'Points'            : str(get_points(rank)),
+                'OneAndDonePoints'  : str(get_points(rank, one_n_done=True)),
             })
         else:
             rank = None
@@ -189,6 +208,7 @@ def parse_leaderboard(leaderboard, player_profiles):
                 'DraftKingsPlayerID': player_profile['DraftKingsPlayerID'],
                 'DraftKingsName'    : player_profile['DraftKingsName'],
                 'Points'            : str(get_points(rank)),
+                'OneAndDonePoints'  : str(get_points(rank, one_n_done=True)),
             })
 
     return ranked_leaderboard + unranked_leaderboard
@@ -467,13 +487,18 @@ def results():
             if standing is None:
                 print('Failed to find {} ({}) in leaderbaord'.format(player_profile['DraftKingsName'], pick['PlayerID']))
             else:
-                totals[owner] += int(standing['Points'])
+                standing['Rank']
+                if pick['OneAndDone']:
+                    totals[owner] += int(standing['OneAndDonePoints'])
+                else:
+                    totals[owner] += int(standing['Points'])
                 edited_picks[owner].append({
-                    'DraftKingsName': player_profile['DraftKingsName'],
-                    'Rank'          : standing['Rank'],
-                    'Points'        : standing['Points'],
-                    'PhotoUrl'      : player_profile['PhotoUrl'],
-                    'OneAndDone'    : pick['OneAndDone'],
+                    'DraftKingsName'    : player_profile['DraftKingsName'],
+                    'Rank'              : standing['Rank'],
+                    'Points'            : standing['Points'],
+                    'OneAndDonePoints'  : standing['OneAndDonePoints'],
+                    'PhotoUrl'          : player_profile['PhotoUrl'],
+                    'OneAndDone'        : pick['OneAndDone'],
                 })
 
     totals = dict(sorted(totals.items(), key=lambda item: item[1], reverse=True))
@@ -539,6 +564,7 @@ def create_leaderboard_table():
             DraftKingsPlayerID TEXT NOT NULL,
             DraftKingsName TEXT NOT NULL,
             Points TEXT NOT NULL,
+            OneAndDonePoints TEXT NOT NULL,
             Position INTEGER NOT NULL
         );
     ''')
@@ -560,19 +586,21 @@ def update_leaderboard(tournament_id, leaderboard=None):
             player['PlayerID']
         )).fetchall()
         if len(db_player) == 0:
-            curr.execute('INSERT INTO leaderboards (TournamentID, PlayerID, Rank, DraftKingsPlayerID, DraftKingsName, Points, Position) VALUES (?, ?, ?, ?, ?, ?, ?)', (
+            curr.execute('INSERT INTO leaderboards (TournamentID, PlayerID, Rank, DraftKingsPlayerID, DraftKingsName, Points, OneAndDonePoints, Position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', (
                 tournament_id,
                 player['PlayerID'],
                 player['Rank'],
                 player['DraftKingsPlayerID'],
                 player['DraftKingsName'],
                 player['Points'],
+                player['OneAndDonePoints'],
                 position,
             ))
         else:
-            curr.execute('UPDATE leaderboards SET Rank=?, Points=?, Position=? WHERE TournamentID==? AND PlayerID==?', (
+            curr.execute('UPDATE leaderboards SET Rank=?, Points=?, OneAndDonePoints=?, Position=? WHERE TournamentID==? AND PlayerID==?', (
                 player['Rank'],
                 player['Points'],
+                player['OneAndDonePoints'],
                 position,
                 tournament_id,
                 player['PlayerID'],
@@ -786,8 +814,8 @@ def wait_for_round_start(leaderboard, round_num):
             time.sleep(sleep_seconds)
 
 def sandbox():
-    # create_leaderboard_table()
-    # update_leaderboard(TOURNAMENT_ID)
+    create_leaderboard_table()
+    update_leaderboard(TOURNAMENT_ID)
 
     # create_picks_table()
     # add_picks()

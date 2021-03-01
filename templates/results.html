@@ -2,13 +2,18 @@
 {% set active_page = "results" %}
 {% block title %} Live Results {% endblock %}
 
+{% block header %}
+    <meta http-equiv="refresh" content="60">
+{% endblock %}
+
+
 {% block content %}
     <h1>{{ tournament['Name'] }}</h1>
     <h6>Updated {{ last_updated['LeaderboardLastUpdated'] }}</h6>
 
     <h2>Standings</h2>
     <table class="table table-success table-striped table-sm">
-        <thead>
+        <thead class="table-dark">
             <tr>
                 <th scope="col">Rank</th>
                 <th scope="col">Owner</th>
@@ -29,7 +34,7 @@
     {% for owner in owners %}
         <h2>{{ owner }}</h2>
         <table class="table table-success table-striped table-sm">
-            <thead>
+            <thead class="table-dark">
                 <tr>
                     <th scope="col">Rank</th>
                     <th scope="col" colspan="2">Player</th>
@@ -42,21 +47,33 @@
                     <th class="col-1 align-middle" scope="row">{% if player["Rank"] != "None" %}{{ player["Rank"] }}{% else %}-{% endif %}</th>
                     <td class="col-2 align-middle"><img src="{{ player['PhotoUrl'] }}" class="figure-img img-fluid rounded" alt="..." style="height:45px; margin:0"></td>
                     <td class="align-middle">{{ player["DraftKingsName"] }}{% if player["OneAndDone"] %} (One-N-Done){% endif %}</td>
-                    <td class="col-1 align-middle">{% if player["Rank"] != "None" %}{{ player["Points"] }}{% else %}-{% endif %}</td>
+                    <td class="col-1 align-middle">
+                        {% if player["Rank"] != "None" %}
+                            {% if player["OneAndDone"] %}
+                                {{ player["OneAndDonePoints"] }}
+                            {% else %}
+                                {{ player["Points"] }}
+                            {% endif %}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
-                <tr>
-                    <td class="align-middle" colspan="2"></td>
-                    <td class="align-middle">Total</td>
-                    <td class="align-middle" class=="table-secondary">{{ totals[owner] }}</td>
-                </tr>
             </tbody>
+            <tfoot>
+                <tr class="table-secondary">
+                    <td class="align-middle" colspan="2"></td>
+                    <td class="align-middle"><b>Total</b></td>
+                    <td class="align-middle" class=="table-secondary"><b>{{ totals[owner] }}</b></td>
+                </tr>
+            </tfoot>
         </table>
     {% endfor %}
 
     <h2>Leaderboard</h2>
     <table class="table table-success table-striped table-sm">
-        <thead>
+        <thead class="table-dark">
             <tr>
                 <th scope="col">Rank</th>
                 <th scope="col">Player</th>
