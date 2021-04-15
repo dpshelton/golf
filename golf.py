@@ -12,22 +12,25 @@ import sqlite3
 from flask import Flask, escape, request, render_template
 from draft_kings import Sport, Client
 
-TOURNAMENT_ID = 427
+TOURNAMENT_ID   = 433
+MAJOR           = False
 
 KEY = 'a478d29a98e54eac8e9ebf1f218dd0b8'
 
-START_DAY_WINDOW    = 4
-END_DAY_WINDOW      = 1
-PLAYERS_FILENAME    = 'player_profiles.json'
-LEADERBOARD_UPDATE_PERIOD = 15 * 60
+START_DAY_WINDOW            = 4
+END_DAY_WINDOW              = 1
+PLAYERS_FILENAME            = 'player_profiles.json'
+LEADERBOARD_UPDATE_PERIOD   = 10 * 60
+ROUND_END_SLEEP_PERIOD      = 6 * 60 * 60
 
 CMDS = [
-    'fixtures',
+    'players',
     'manage-leaderboard',
     'update-leaderboard',
     'create-leaderboard-table',
     'tournaments',
     'picks',
+    'clear-picks',
     'sandbox',
     'flask',
 ]
@@ -153,18 +156,20 @@ def get_player_id_from_name(player_name, player_profiles):
 
     return None
 
-def get_points(rank, one_n_done=False):
+def get_points(rank, one_n_done=False, major=False):
+    multiplier = 2 if major else 1
+
     if rank is None:
         return 0
     else:
         if one_n_done:
             for start, end, points in ONE_N_DONE_POINTS:
                 if rank >= start and rank <= end:
-                    return points
+                    return points * multiplier
         else:
             for start, end, points in POINTS:
                 if rank >= start and rank <= end:
-                    return points
+                    return points * multiplier
 
     return 0
 
@@ -196,8 +201,8 @@ def parse_leaderboard(leaderboard, player_profiles):
                 'Rank'              : str(rank),
                 'DraftKingsPlayerID': player_profile['DraftKingsPlayerID'],
                 'DraftKingsName'    : player_profile['DraftKingsName'],
-                'Points'            : str(get_points(rank)),
-                'OneAndDonePoints'  : str(get_points(rank, one_n_done=True)),
+                'Points'            : str(get_points(rank, one_n_done=False, major=MAJOR)),
+                'OneAndDonePoints'  : str(get_points(rank, one_n_done=True , major=MAJOR)),
             })
         else:
             rank = None
@@ -207,8 +212,8 @@ def parse_leaderboard(leaderboard, player_profiles):
                 'Rank'              : str(rank),
                 'DraftKingsPlayerID': player_profile['DraftKingsPlayerID'],
                 'DraftKingsName'    : player_profile['DraftKingsName'],
-                'Points'            : str(get_points(rank)),
-                'OneAndDonePoints'  : str(get_points(rank, one_n_done=True)),
+                'Points'            : str(get_points(rank, one_n_done=False, major=MAJOR)),
+                'OneAndDonePoints'  : str(get_points(rank, one_n_done=True , major=MAJOR)),
             })
 
     return ranked_leaderboard + unranked_leaderboard
@@ -299,6 +304,8 @@ def populate_salaries_table(tournament_id):
     for draft_group in contests.draft_groups:
         draft_group_details = Client().draft_group_details(draft_group_id=draft_group.draft_group_id)
 
+        # print('{}         {}'.format(draft_group_details.games[0].name, tournament['Name']))
+        # if draft_group_details.games[0].name != 'Arnold Palmer Invitational presented by Mastercard':
         if draft_group_details.games[0].name != tournament['Name']:
             continue
         if draft_group_details.leagues[0].abbreviation != 'PGA':
@@ -474,7 +481,7 @@ def results():
     leaderboard, last_updated = get_leaderboard(tournament_id)
 
     player_profiles = load_player_profiles()
-    picks = get_picks()
+    picks = get_picks(tournament_id)
 
     edited_picks = {}
     totals = {}
@@ -668,59 +675,60 @@ def add_picks():
     conn = get_db_connection()
     curr = conn.cursor()
 
-    add_pick('Ben', TOURNAMENT_ID, 'Xander Schauffele')
-    add_pick('Ben', TOURNAMENT_ID, 'Justin Thomas')
-    add_pick('Ben', TOURNAMENT_ID, 'Tony Finau')
-    add_pick('Ben', TOURNAMENT_ID, 'Brendon Todd')
-    add_pick('Ben', TOURNAMENT_ID, 'Cameron Champ')
-    add_pick('Ben', TOURNAMENT_ID, 'David Lipsky')
+    add_pick('Ben', TOURNAMENT_ID,  'Dustin Johnson')
+    add_pick('Ben', TOURNAMENT_ID,  'Collin Morikawa')
+    add_pick('Ben', TOURNAMENT_ID,  'Charley Hoffman')
+    add_pick('Ben', TOURNAMENT_ID,  'Carlos Ortiz')
+    add_pick('Ben', TOURNAMENT_ID,  'Patton Kizzire')
+    add_pick('Ben', TOURNAMENT_ID,  'Beau Hossler')
 
-    add_pick('Greg', TOURNAMENT_ID, 'Justin Thomas')
-    add_pick('Greg', TOURNAMENT_ID, 'Daniel Berger')
-    add_pick('Greg', TOURNAMENT_ID, 'Scottie Scheffler')
-    add_pick('Greg', TOURNAMENT_ID, 'Jason Day')
-    add_pick('Greg', TOURNAMENT_ID, 'Ryan Palmer')
-    add_pick('Greg', TOURNAMENT_ID, 'Gary Woodland')
+    add_pick('Greg', TOURNAMENT_ID, 'Collin Morikawa')
+    add_pick('Greg', TOURNAMENT_ID, 'Brian Harman')
+    add_pick('Greg', TOURNAMENT_ID, 'Russell Henley')
+    add_pick('Greg', TOURNAMENT_ID, 'Si Woo Kim')
+    add_pick('Greg', TOURNAMENT_ID, 'Chris Kirk')
+    add_pick('Greg', TOURNAMENT_ID, 'Matt Wallace')
 
-    add_pick('Mike', TOURNAMENT_ID, 'Ryan Palmer')
-    add_pick('Mike', TOURNAMENT_ID, 'Lanto Griffin')
-    add_pick('Mike', TOURNAMENT_ID, 'Will Zalatoris')
-    add_pick('Mike', TOURNAMENT_ID, 'Cameron Smith')
-    add_pick('Mike', TOURNAMENT_ID, 'Viktor Hovland')
-    add_pick('Mike', TOURNAMENT_ID, 'Bryson DeChambeau')
+    add_pick('Mike', TOURNAMENT_ID, 'Webb Simpson')
+    add_pick('Mike', TOURNAMENT_ID, 'Russell Henley')
+    add_pick('Mike', TOURNAMENT_ID, 'Matt Kuchar')
+    add_pick('Mike', TOURNAMENT_ID, 'Robert Macintyre')
+    add_pick('Mike', TOURNAMENT_ID, 'Stewart Cink')
+    add_pick('Mike', TOURNAMENT_ID, 'Abraham Ancer')
 
-    add_pick('Don', TOURNAMENT_ID, 'Justin Thomas')
-    add_pick('Don', TOURNAMENT_ID, 'Patrick Reed')
-    add_pick('Don', TOURNAMENT_ID, 'Daniel Berger')
-    add_pick('Don', TOURNAMENT_ID, 'Jason Day')
-    add_pick('Don', TOURNAMENT_ID, 'Billy Horschel')
-    add_pick('Don', TOURNAMENT_ID, 'Lucas Herbert')
+    add_pick('Don', TOURNAMENT_ID,  'Lee Westwood')
+    add_pick('Don', TOURNAMENT_ID,  'Cameron Smith')
+    add_pick('Don', TOURNAMENT_ID,  'Paul Casey')
+    add_pick('Don', TOURNAMENT_ID,  'Si Woo Kim')
+    add_pick('Don', TOURNAMENT_ID,  'Kevin Kisner')
+    add_pick('Don', TOURNAMENT_ID,  'Adam Long')
 
-    add_pick('Sean', TOURNAMENT_ID, 'Patrick Reed')
-    add_pick('Sean', TOURNAMENT_ID, 'Dustin Johnson')
-    add_pick('Sean', TOURNAMENT_ID, 'Jon Rahm')
-    add_pick('Sean', TOURNAMENT_ID, 'Sami Valimaki')
-    add_pick('Sean', TOURNAMENT_ID, 'Trevor Simsby')
-    add_pick('Sean', TOURNAMENT_ID, 'Wade Ormsby')
+    add_pick('Sean', TOURNAMENT_ID, 'Corey Conners')
+    add_pick('Sean', TOURNAMENT_ID, 'Daniel Berger')
+    add_pick('Sean', TOURNAMENT_ID, 'Collin Morikawa')
+    add_pick('Sean', TOURNAMENT_ID, 'Zach Johnson')
+    add_pick('Sean', TOURNAMENT_ID, 'Harold Varner III')
+    add_pick('Sean', TOURNAMENT_ID, 'Bill Haas')
 
     # One and Dones
-    add_pick('Ben',  TOURNAMENT_ID, 'Patrick Cantlay', True)
-    add_pick('Greg', TOURNAMENT_ID, 'Ryan Palmer', True)
-    add_pick('Mike', TOURNAMENT_ID, 'Tyrrell Hatton', True)
-    add_pick('Don',  TOURNAMENT_ID, 'Patrick Reed', True)
-    add_pick('Sean', TOURNAMENT_ID, 'Tommy Fleetwood', True)
+    add_pick('Ben',  TOURNAMENT_ID, 'Webb Simpson', True)
+    add_pick('Greg', TOURNAMENT_ID, 'Collin Morikawa', True)
+    add_pick('Mike', TOURNAMENT_ID, 'Abraham Ancer', True)
+    add_pick('Don',  TOURNAMENT_ID, 'Cameron Smith', True)
+    add_pick('Sean', TOURNAMENT_ID, 'Patrick Cantlay', True)
 
     conn.commit()
     conn.close()
 
-def get_picks():
+def get_picks(tournament_id):
     conn = get_db_connection()
     curr = conn.cursor()
 
     picks = {}
     for owner in OWNERS:
-        picks[owner] = conn.execute('SELECT * FROM picks WHERE Owner == ?', (
+        picks[owner] = conn.execute('SELECT * FROM picks WHERE Owner == ? and TournamentID == ?', (
             owner,
+            tournament_id,
         )).fetchall()
 
     conn.commit()
@@ -768,14 +776,16 @@ def manage_leaderboard(tournament_id, starting_round_num=1):
     leaderboard = api_get_leaderboard(tournament_id)
     num_rounds = len(leaderboard['Tournament']['Rounds'])
 
+    prev_players_remaining = None
     while round_num <= num_rounds:
-        if first_iteration:
-            first_iteration = False
-        else:
+        if not first_iteration:
             leaderboard = api_get_leaderboard(tournament_id)
         update_leaderboard(tournament_id, leaderboard)
 
-        wait_for_round_start(leaderboard, round_num)
+        if (first_iteration and starting_round_num == 1):
+            wait_for_round_start(leaderboard, round_num, True)
+        else:
+            wait_for_round_start(leaderboard, round_num, False)
 
         round_complete = True
         last_tee_time = get_last_tee_time(leaderboard, round_num)
@@ -790,17 +800,24 @@ def manage_leaderboard(tournament_id, starting_round_num=1):
                     players_remaining += 1
 
             if players_remaining > 0:
+
                 print('Waiting for {} players to complete round.'.format(players_remaining))
                 round_complete = False
+
+            prev_players_remaining = players_remaining
 
         if round_complete:
             print('Round {} is over.'.format(round_num))
             round_num += 1
+            print('Sleeping for {} seconds'.format(ROUND_END_SLEEP_PERIOD))
+            time.sleep(ROUND_END_SLEEP_PERIOD)
         else:
             print('Sleeping for {} seconds'.format(LEADERBOARD_UPDATE_PERIOD))
             time.sleep(LEADERBOARD_UPDATE_PERIOD)
 
-def wait_for_round_start(leaderboard, round_num):
+        first_iteration = False
+
+def wait_for_round_start(leaderboard, round_num, do_update_picks):
     first_tee_time = get_first_tee_time(leaderboard, round_num)
 
     if first_tee_time is None:
@@ -813,28 +830,21 @@ def wait_for_round_start(leaderboard, round_num):
             print('Now: {}, First Tee Time: {}. Sleeping for {} seconds...'.format(now.strftime("%Y-%m-%d %H:%M:%S"), first_tee_time, sleep_seconds))
             time.sleep(sleep_seconds)
 
+        if do_update_picks:
+            update_picks()
+
+def update_picks():
+    print('Updating picks...')
+    create_picks_table()
+    add_picks()
+
 def sandbox():
-    create_leaderboard_table()
-    update_leaderboard(TOURNAMENT_ID)
-
-    # create_picks_table()
-    # add_picks()
-
-    # pprint(api_get_all_tournaments())
-
-    # pprint(api_get_leaderboard(TOURNAMENT_ID))
-
-    # leaderboard = api_get_leaderboard(TOURNAMENT_ID)
-    # wait_for_round_start(leaderboard=leaderboard, round_num=3)
-
-    # manage_leaderboard(TOURNAMENT_ID, starting_round_num=3)
-
     pass
 
 def main():
     args = parse_args()
 
-    if args.cmd == 'fixtures':
+    if args.cmd == 'players':
         player_profiles = fetch_player_profiles()
 
     elif args.cmd == 'create-leaderboard-table':
@@ -851,8 +861,11 @@ def main():
         populate_tournaments_table()
 
     elif args.cmd == 'picks':
+        update_picks()
+
+    elif args.cmd == 'clear-picks':
         create_picks_table()
-        add_picks()
+        update_leaderboard(TOURNAMENT_ID)
 
     elif args.cmd == 'flask':
         app.run(host='0.0.0.0', port=80, debug=True)
