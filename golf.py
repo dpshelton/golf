@@ -12,7 +12,7 @@ import sqlite3
 from flask import Flask, escape, request, render_template
 from draft_kings import Sport, Client
 
-TOURNAMENT_ID   = 433
+TOURNAMENT_ID   = 479
 MAJOR           = False
 
 KEY = 'a478d29a98e54eac8e9ebf1f218dd0b8'
@@ -22,6 +22,7 @@ END_DAY_WINDOW              = 1
 PLAYERS_FILENAME            = 'player_profiles.json'
 LEADERBOARD_UPDATE_PERIOD   = 10 * 60
 ROUND_END_SLEEP_PERIOD      = 6 * 60 * 60
+MAJOR_MULTIPLIER            = 1.5
 
 CMDS = [
     'players',
@@ -37,34 +38,32 @@ CMDS = [
 
 POINTS = [
     (1 , 1   , 100),
-    (2 , 2   ,  75),
-    (3 , 3   ,  50),
-    (4 , 4   ,  30),
-    (5 , 5   ,  25),
-    (6 , 6   ,  20),
-    (7 , 7   ,  18),
-    (8 , 8   ,  16),
-    (9 , 9   ,  14),
-    (10, 10  ,  12),
-    (11, 15  ,  10),
-    (16, 20  ,   8),
-    (21, 30  ,   6),
-    (31, 40  ,   5),
-    (41, 50  ,   3),
-    (51, 1000,   1),
+    (2 , 2   , 75 ),
+    (3 , 3   , 50 ),
+    (4 , 4   , 30 ),
+    (5 , 5   , 25 ),
+    (6 , 6   , 20 ),
+    (7 , 7   , 18 ),
+    (8 , 8   , 16 ),
+    (9 , 9   , 14 ),
+    (10, 10  , 12 ),
+    (11, 20  , 10 ),
+    (21, 30  , 8  ),
+    (31, 40  , 7  ),
+    (41, 1000, 5  ),
 ]
 
 ONE_N_DONE_POINTS = [
-    (1 , 1   , 100),
-    (2 , 2   ,  50),
-    (3 , 3   ,  30),
-    (4 , 4   ,  25),
-    (5 , 5   ,  20),
-    (6 , 6   ,  15),
-    (7 , 7   ,  12),
-    (8 , 8   ,  10),
-    (9 , 9   ,   8),
-    (10, 10  ,   5),
+    (1 , 1   , 50),
+    (2 , 2   , 25),
+    (3 , 3   , 15),
+    (4 , 4   , 12),
+    (5 , 5   , 10),
+    (6 , 6   , 8 ),
+    (7 , 7   , 6 ),
+    (8 , 8   , 5 ),
+    (9 , 9   , 4 ),
+    (10, 10  , 3 ),
 ]
 
 OWNERS = [
@@ -157,7 +156,7 @@ def get_player_id_from_name(player_name, player_profiles):
     return None
 
 def get_points(rank, one_n_done=False, major=False):
-    multiplier = 2 if major else 1
+    multiplier = MAJOR_MULTIPLIER if major else 1
 
     if rank is None:
         return 0
@@ -490,23 +489,36 @@ def results():
         totals[owner] = 0
         for pick in picks[owner]:
             player_profile = get_player_profile(player_id=pick['PlayerID'], player_profiles=player_profiles)
-            standing = get_player_standing(pick['PlayerID'], leaderboard)
-            if standing is None:
-                print('Failed to find {} ({}) in leaderbaord'.format(player_profile['DraftKingsName'], pick['PlayerID']))
-            else:
-                standing['Rank']
-                if pick['OneAndDone']:
-                    totals[owner] += int(standing['OneAndDonePoints'])
-                else:
-                    totals[owner] += int(standing['Points'])
+
+            if player_profile['DraftKingsName'] == 'Natalie Shelton':
+                totals[owner] += 0
+
                 edited_picks[owner].append({
                     'DraftKingsName'    : player_profile['DraftKingsName'],
-                    'Rank'              : standing['Rank'],
-                    'Points'            : standing['Points'],
-                    'OneAndDonePoints'  : standing['OneAndDonePoints'],
-                    'PhotoUrl'          : player_profile['PhotoUrl'],
+                    'Rank'              : None,
+                    'Points'            : 0,
+                    'OneAndDonePoints'  : 0,
+                    'PhotoUrl'          : '/static/natalie.jpg',
                     'OneAndDone'        : pick['OneAndDone'],
                 })
+            else:
+                standing = get_player_standing(pick['PlayerID'], leaderboard)
+                if standing is None:
+                    print('Failed to find {} ({}) in leaderboard'.format(player_profile['DraftKingsName'], pick['PlayerID']))
+                else:
+                    standing['Rank']
+                    if pick['OneAndDone']:
+                        totals[owner] += int(standing['OneAndDonePoints'])
+                    else:
+                        totals[owner] += int(standing['Points'])
+                    edited_picks[owner].append({
+                        'DraftKingsName'    : player_profile['DraftKingsName'],
+                        'Rank'              : standing['Rank'],
+                        'Points'            : standing['Points'],
+                        'OneAndDonePoints'  : standing['OneAndDonePoints'],
+                        'PhotoUrl'          : player_profile['PhotoUrl'],
+                        'OneAndDone'        : pick['OneAndDone'],
+                    })
 
     totals = dict(sorted(totals.items(), key=lambda item: item[1], reverse=True))
 
@@ -597,8 +609,8 @@ def update_leaderboard(tournament_id, leaderboard=None):
                 tournament_id,
                 player['PlayerID'],
                 player['Rank'],
-                player['DraftKingsPlayerID'],
-                player['DraftKingsName'],
+                player['DraftKingsPlayerID'] if player['DraftKingsPlayerID'] is not None else 'Unknown',
+                player['DraftKingsName'] if player['DraftKingsName'] is not None else 'Unknown',
                 player['Points'],
                 player['OneAndDonePoints'],
                 position,
@@ -675,47 +687,47 @@ def add_picks():
     conn = get_db_connection()
     curr = conn.cursor()
 
-    add_pick('Ben', TOURNAMENT_ID,  'Dustin Johnson')
-    add_pick('Ben', TOURNAMENT_ID,  'Collin Morikawa')
-    add_pick('Ben', TOURNAMENT_ID,  'Charley Hoffman')
-    add_pick('Ben', TOURNAMENT_ID,  'Carlos Ortiz')
-    add_pick('Ben', TOURNAMENT_ID,  'Patton Kizzire')
+    add_pick('Ben', TOURNAMENT_ID,  'Matthew Wolff')
+    add_pick('Ben', TOURNAMENT_ID,  'Mackenzie Hughes')
+    add_pick('Ben', TOURNAMENT_ID,  'Kyoung-Hoon Lee')
+    add_pick('Ben', TOURNAMENT_ID,  'Brendon Todd')
+    add_pick('Ben', TOURNAMENT_ID,  'Daniel Berger')
     add_pick('Ben', TOURNAMENT_ID,  'Beau Hossler')
 
-    add_pick('Greg', TOURNAMENT_ID, 'Collin Morikawa')
-    add_pick('Greg', TOURNAMENT_ID, 'Brian Harman')
-    add_pick('Greg', TOURNAMENT_ID, 'Russell Henley')
-    add_pick('Greg', TOURNAMENT_ID, 'Si Woo Kim')
+    add_pick('Greg', TOURNAMENT_ID, 'Louis Oosthuizen')
+    add_pick('Greg', TOURNAMENT_ID, 'Brooks Koepka')
+    add_pick('Greg', TOURNAMENT_ID, 'Brendon Todd')
+    add_pick('Greg', TOURNAMENT_ID, 'Michael Thompson')
     add_pick('Greg', TOURNAMENT_ID, 'Chris Kirk')
-    add_pick('Greg', TOURNAMENT_ID, 'Matt Wallace')
+    add_pick('Greg', TOURNAMENT_ID, 'Satoshi Kodaira')
 
-    add_pick('Mike', TOURNAMENT_ID, 'Webb Simpson')
-    add_pick('Mike', TOURNAMENT_ID, 'Russell Henley')
-    add_pick('Mike', TOURNAMENT_ID, 'Matt Kuchar')
-    add_pick('Mike', TOURNAMENT_ID, 'Robert Macintyre')
-    add_pick('Mike', TOURNAMENT_ID, 'Stewart Cink')
-    add_pick('Mike', TOURNAMENT_ID, 'Abraham Ancer')
+    add_pick('Mike', TOURNAMENT_ID, 'Sungjae Im')
+    add_pick('Mike', TOURNAMENT_ID, 'Billy Horschel')
+    add_pick('Mike', TOURNAMENT_ID, 'Cameron Young')
+    add_pick('Mike', TOURNAMENT_ID, 'Aaron Rai')
+    add_pick('Mike', TOURNAMENT_ID, 'Hudson Swafford')
+    add_pick('Mike', TOURNAMENT_ID, 'Paul Barjon')
 
+    add_pick('Don', TOURNAMENT_ID,  'Daniel Berger')
+    add_pick('Don', TOURNAMENT_ID,  'Sungjae Im')
+    add_pick('Don', TOURNAMENT_ID,  'Patrick Reed')
     add_pick('Don', TOURNAMENT_ID,  'Lee Westwood')
-    add_pick('Don', TOURNAMENT_ID,  'Cameron Smith')
-    add_pick('Don', TOURNAMENT_ID,  'Paul Casey')
-    add_pick('Don', TOURNAMENT_ID,  'Si Woo Kim')
-    add_pick('Don', TOURNAMENT_ID,  'Kevin Kisner')
-    add_pick('Don', TOURNAMENT_ID,  'Adam Long')
+    add_pick('Don', TOURNAMENT_ID,  'Max McGreevy')
+    add_pick('Don', TOURNAMENT_ID,  'Erik Compton')
 
-    add_pick('Sean', TOURNAMENT_ID, 'Corey Conners')
-    add_pick('Sean', TOURNAMENT_ID, 'Daniel Berger')
-    add_pick('Sean', TOURNAMENT_ID, 'Collin Morikawa')
-    add_pick('Sean', TOURNAMENT_ID, 'Zach Johnson')
-    add_pick('Sean', TOURNAMENT_ID, 'Harold Varner III')
+    add_pick('Sean', TOURNAMENT_ID, 'Brooks Koepka')
+    add_pick('Sean', TOURNAMENT_ID, 'Doug Ghim')
     add_pick('Sean', TOURNAMENT_ID, 'Bill Haas')
+    add_pick('Sean', TOURNAMENT_ID, 'Tommy Fleetwood')
+    add_pick('Sean', TOURNAMENT_ID, 'Brandon Hagy')
+    add_pick('Sean', TOURNAMENT_ID, 'Daniel Berger')
 
     # One and Dones
-    add_pick('Ben',  TOURNAMENT_ID, 'Webb Simpson', True)
-    add_pick('Greg', TOURNAMENT_ID, 'Collin Morikawa', True)
-    add_pick('Mike', TOURNAMENT_ID, 'Abraham Ancer', True)
-    add_pick('Don',  TOURNAMENT_ID, 'Cameron Smith', True)
-    add_pick('Sean', TOURNAMENT_ID, 'Patrick Cantlay', True)
+    add_pick('Ben',  TOURNAMENT_ID, 'Billy Horschel', True)
+    add_pick('Greg', TOURNAMENT_ID, 'Louis Oosthuizen', True)
+    add_pick('Mike', TOURNAMENT_ID, 'Sungjae Im', True)
+    add_pick('Don',  TOURNAMENT_ID, 'Sungjae Im', True)
+    add_pick('Sean', TOURNAMENT_ID, 'Tommy Fleetwood', True)
 
     conn.commit()
     conn.close()
