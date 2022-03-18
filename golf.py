@@ -12,8 +12,59 @@ import sqlite3
 from flask import Flask, escape, request, render_template
 from draft_kings import Sport, Client
 
-TOURNAMENT_ID   = 479
+TOURNAMENT_ID   = 483
 MAJOR           = False
+
+PICKS = {
+    'Ben': [
+        'Viktor Hovland',
+        'Shane Lowry',
+        'Webb Simpson',
+        'Doc Redman',
+        'Branden Grace',
+        'Sung Kang',
+    ],
+    'Greg': [
+        'Collin Morikawa',
+        'Dustin Johnson',
+        'Gary Woodland',
+        'Adam Hadwin',
+        'Kramer Hickok',
+        'Cameron Percy',
+    ],
+    'Mike': [
+        'Dustin Johnson',
+        'Sam Burns',
+        'Jason Kokrak',
+        'Adam Hadwin',
+        'Charley Hoffman',
+        'Tommy Gainey',
+    ],
+    'Don': [
+        'Tommy Fleetwood',
+        'Viktor Hovland',
+        'Paul Casey',
+        'Gary Woodland',
+        'Cameron Percy',
+        'Tommy Gainey',
+    ],
+    'Sean': [
+        'Louis Oosthuizen',
+        'Viktor Hovland',
+        'Alex Noren',
+        'Francesco Molinari',
+        'Andrew Putnam',
+        'Luke Donald',
+    ],
+}
+
+ONE_N_DONES = {
+    'Ben' : 'Shane Lowry',
+    'Greg': 'Abraham Ancer',
+    'Mike': 'Abraham Ancer',
+    'Don' : 'Viktor Hovland',
+    'Sean': 'Louis Oosthuizen',
+}
 
 KEY = 'a478d29a98e54eac8e9ebf1f218dd0b8'
 
@@ -98,6 +149,7 @@ def api_request(url):
 
 def api_get_all_players():
     print('API-CALL: {}'.format(inspect.currentframe().f_code.co_name))
+    print('{}'.format(BASE_URL + '/golf/v2/json/Players'))
     return api_request(BASE_URL + '/golf/v2/json/Players')
 
 def api_get_all_tournaments():
@@ -687,47 +739,13 @@ def add_picks():
     conn = get_db_connection()
     curr = conn.cursor()
 
-    add_pick('Ben', TOURNAMENT_ID,  'Matthew Wolff')
-    add_pick('Ben', TOURNAMENT_ID,  'Mackenzie Hughes')
-    add_pick('Ben', TOURNAMENT_ID,  'Kyoung-Hoon Lee')
-    add_pick('Ben', TOURNAMENT_ID,  'Brendon Todd')
-    add_pick('Ben', TOURNAMENT_ID,  'Daniel Berger')
-    add_pick('Ben', TOURNAMENT_ID,  'Beau Hossler')
+    for owner in OWNERS:
+        # Add picks
+        for pick in PICKS[owner]:
+            add_pick(owner, TOURNAMENT_ID, pick)
 
-    add_pick('Greg', TOURNAMENT_ID, 'Louis Oosthuizen')
-    add_pick('Greg', TOURNAMENT_ID, 'Brooks Koepka')
-    add_pick('Greg', TOURNAMENT_ID, 'Brendon Todd')
-    add_pick('Greg', TOURNAMENT_ID, 'Michael Thompson')
-    add_pick('Greg', TOURNAMENT_ID, 'Chris Kirk')
-    add_pick('Greg', TOURNAMENT_ID, 'Satoshi Kodaira')
-
-    add_pick('Mike', TOURNAMENT_ID, 'Sungjae Im')
-    add_pick('Mike', TOURNAMENT_ID, 'Billy Horschel')
-    add_pick('Mike', TOURNAMENT_ID, 'Cameron Young')
-    add_pick('Mike', TOURNAMENT_ID, 'Aaron Rai')
-    add_pick('Mike', TOURNAMENT_ID, 'Hudson Swafford')
-    add_pick('Mike', TOURNAMENT_ID, 'Paul Barjon')
-
-    add_pick('Don', TOURNAMENT_ID,  'Daniel Berger')
-    add_pick('Don', TOURNAMENT_ID,  'Sungjae Im')
-    add_pick('Don', TOURNAMENT_ID,  'Patrick Reed')
-    add_pick('Don', TOURNAMENT_ID,  'Lee Westwood')
-    add_pick('Don', TOURNAMENT_ID,  'Max McGreevy')
-    add_pick('Don', TOURNAMENT_ID,  'Erik Compton')
-
-    add_pick('Sean', TOURNAMENT_ID, 'Brooks Koepka')
-    add_pick('Sean', TOURNAMENT_ID, 'Doug Ghim')
-    add_pick('Sean', TOURNAMENT_ID, 'Bill Haas')
-    add_pick('Sean', TOURNAMENT_ID, 'Tommy Fleetwood')
-    add_pick('Sean', TOURNAMENT_ID, 'Brandon Hagy')
-    add_pick('Sean', TOURNAMENT_ID, 'Daniel Berger')
-
-    # One and Dones
-    add_pick('Ben',  TOURNAMENT_ID, 'Billy Horschel', True)
-    add_pick('Greg', TOURNAMENT_ID, 'Louis Oosthuizen', True)
-    add_pick('Mike', TOURNAMENT_ID, 'Sungjae Im', True)
-    add_pick('Don',  TOURNAMENT_ID, 'Sungjae Im', True)
-    add_pick('Sean', TOURNAMENT_ID, 'Tommy Fleetwood', True)
+        # Add One-N-Done
+        add_pick(owner, TOURNAMENT_ID, ONE_N_DONES[owner], True)
 
     conn.commit()
     conn.close()
@@ -851,6 +869,7 @@ def update_picks():
     add_picks()
 
 def sandbox():
+    print(PICKS)
     pass
 
 def main():
