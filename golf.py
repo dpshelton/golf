@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sys
 import argparse
 import requests
 import json
@@ -11,59 +12,65 @@ from prettytable import PrettyTable
 import sqlite3
 from flask import Flask, escape, request, render_template
 from draft_kings import Sport, Client
+import copy
+import random
+import pandas as pd
 
-TOURNAMENT_ID   = 483
-MAJOR           = False
+TOURNAMENT_ID   = 487
+MAJOR           = True
+
+MAX_SALARY      = 50000
+NUM_PICKS       = 6
 
 PICKS = {
     'Ben': [
-        'Viktor Hovland',
-        'Shane Lowry',
-        'Webb Simpson',
-        'Doc Redman',
-        'Branden Grace',
-        'Sung Kang',
+        'Corey Conners',
+        'Chris Kirk',
+        'Gary Woodland',
+        'Nick Taylor',
+        'Matthew NeSmith',
+        'Beau Hossler',
     ],
     'Greg': [
-        'Collin Morikawa',
-        'Dustin Johnson',
-        'Gary Woodland',
-        'Adam Hadwin',
-        'Kramer Hickok',
-        'Cameron Percy',
+        'Rory McIlroy',
+        'Corey Conners',
+        'Luke List',
+        'Nick Taylor',
+        'Matthew NeSmith',
+        'Paul Barjon',
     ],
     'Mike': [
-        'Dustin Johnson',
-        'Sam Burns',
-        'Jason Kokrak',
+        'Rory McIlroy',
+        'Chris Kirk',
         'Adam Hadwin',
-        'Charley Hoffman',
-        'Tommy Gainey',
+        'Patton Kizzire',
+        'Peter Uihlein',
+        'Lee Hodges',
     ],
     'Don': [
-        'Tommy Fleetwood',
-        'Viktor Hovland',
-        'Paul Casey',
-        'Gary Woodland',
-        'Cameron Percy',
-        'Tommy Gainey',
+        'Jordan Spieth',
+        'Mito Pereira',
+        'Bryson DeChambeau',
+        'Charley Hoffman',
+        'Matt Wallace',
+        'Brandt Snedeker',
     ],
     'Sean': [
-        'Louis Oosthuizen',
-        'Viktor Hovland',
-        'Alex Noren',
-        'Francesco Molinari',
-        'Andrew Putnam',
-        'Luke Donald',
+        'Corey Conners',
+        'Jordan Spieth',
+        'Luke List',
+        'Lanto Griffin',
+        'Lee Westwood',
+        'Garrick Higgo',
     ],
 }
 
 ONE_N_DONES = {
-    'Ben' : 'Shane Lowry',
-    'Greg': 'Abraham Ancer',
-    'Mike': 'Abraham Ancer',
-    'Don' : 'Viktor Hovland',
-    'Sean': 'Louis Oosthuizen',
+    'Ben' : 'Chris Kirk',
+    'Greg': 'Corey Conners',
+    'Mike': 'Chris Kirk',
+    'Don' : 'Jordan Spieth',
+    'Sean': 'Jordan Spieth',
 }
 
 KEY = 'a478d29a98e54eac8e9ebf1f218dd0b8'
@@ -85,6 +92,10 @@ CMDS = [
     'clear-picks',
     'sandbox',
     'flask',
+    'salaries',
+    'autopick',
+    'values',
+    'points',
 ]
 
 POINTS = [
@@ -129,6 +140,30 @@ BASE_URL = 'https://fly.sportsdata.io'
 
 app = Flask(__name__)
 
+class Roster():
+    def __init__(self, players):
+        self.players = sorted(players, key=lambda x: x['DraftKingsSalary'], reverse=True)
+        self.total_points = self.get_total_points()
+        self.total_salary = self.get_total_salary()
+
+    def get_total_points(self):
+        return sum([player['FantasyPoints'] for player in self.players])
+
+    def get_total_salary(self):
+        return sum([player['DraftKingsSalary'] for player in self.players])
+
+    def __str__(self):
+        string = ''
+        string += 'Points: {:.3f}, Salary: {:5}\n'.format(self.total_points, self.total_salary)
+        for player in self.players:
+            string += '    {:30}, Points: {:.3f}, Salary: {:5}, Value: {:.3f}\n'.format(
+                player['DraftKingsName'],
+                player['FantasyPoints'],
+                player['DraftKingsSalary'],
+                player['Value'],
+            )
+        return string
+
 def parse_args():
     description = 'Fantasy Golf Tool'
 
@@ -136,6 +171,7 @@ def parse_args():
 
     parser.add_argument('cmd', help='Directory path', type=str, choices=CMDS)
     parser.add_argument('-r', '--round-num', help='Round number', type=int, default=1)
+    parser.add_argument('-n', '--num-rosters', help='Number of rosters', type=int, default=1)
 
     return parser.parse_args()
 
@@ -163,6 +199,10 @@ def api_get_leaderboard(tournament_id):
 def api_get_projections(tournament_id):
     print('API-CALL: {}'.format(inspect.currentframe().f_code.co_name))
     return api_request(BASE_URL + '/golf/v2/json/PlayerTournamentProjectionStats/{}'.format(tournament_id))
+
+def api_get_dfs_slates(tournament_id):
+    print('API-CALL: {}'.format(inspect.currentframe().f_code.co_name))
+    return api_request(BASE_URL + '/golf/v2/json/DfsSlatesByTournament/{}'.format(tournament_id))
 
 def get_active_tournaments():
     active_tournaments = []
@@ -338,7 +378,8 @@ def create_salaries_table():
             PlayerID INTEGER,
             DraftKingsPlayerID INTEGER,
             DraftKingsName TEXT,
-            DraftKingsSalary INTEGER
+            DraftKingsSalary INTEGER,
+            FantasyPoints REAL
         );
     ''')
     conn.commit()
@@ -351,46 +392,84 @@ def populate_salaries_table(tournament_id):
 
     player_profiles = load_player_profiles()
 
-    contests = Client().contests(sport=Sport.GOLF)
-    for draft_group in contests.draft_groups:
-        draft_group_details = Client().draft_group_details(draft_group_id=draft_group.draft_group_id)
+    fantasy_points = {}
+    projections = api_get_projections(TOURNAMENT_ID)
+    for projection in projections:
+        fantasy_points[projection['PlayerID']] = projection['FantasyPoints']
 
-        # print('{}         {}'.format(draft_group_details.games[0].name, tournament['Name']))
-        # if draft_group_details.games[0].name != 'Arnold Palmer Invitational presented by Mastercard':
-        if draft_group_details.games[0].name != tournament['Name']:
-            continue
-        if draft_group_details.leagues[0].abbreviation != 'PGA':
-            continue
-        game_type_rules = Client().game_type_rules(game_type_id=draft_group_details.contest_details.type_id)
-        if not game_type_rules.salary_cap_details.is_enabled or int(game_type_rules.salary_cap_details.maximum_value) != 50000:
-            continue
+    dfs_slates = api_get_dfs_slates(TOURNAMENT_ID)
+    for dfs_slate in dfs_slates:
+        if (dfs_slate['Operator'] == 'DraftKings'):
+            conn = get_db_connection()
+            curr = conn.cursor()
 
-        draftables = Client().draftables(draft_group_id=draft_group_details.draft_group_id)
+            for player in dfs_slate['DfsSlatePlayers']:
+                player_profile = get_player_profile(player_id=player['PlayerID'], player_profiles=player_profiles)
 
-        conn = get_db_connection()
-        curr = conn.cursor()
+                if player_profile is not None:
+                    curr.execute('INSERT INTO salaries (TournamentID, PlayerID, DraftKingsPlayerID, DraftKingsName, DraftKingsSalary, FantasyPoints) VALUES (?, ?, ?, ?, ?, ?)', (
+                        tournament_id,
+                        player_profile['PlayerID'],
+                        player_profile['DraftKingsPlayerID'],
+                        player_profile['DraftKingsName'],
+                        player['OperatorSalary'],
+                        fantasy_points.get(player_profile['PlayerID'], None),
+                    ))
+                else:
+                    print('WTF {}'.format(player['OperatorPlayerName']))
 
-        for player in draftables.players:
-            player_profile = get_player_profile(draft_kings_player_id=player.player_id, player_profiles=player_profiles)
+            conn.commit()
+            conn.close()
 
-            if player_profile is not None:
-                if player.name_details.display != player_profile['DraftKingsName']:
-                    print('Player names do not match {} vs {}'.format(player.name_details.display, player_profile['DraftKingsName']))
+            break
 
-                curr.execute('INSERT INTO salaries (TournamentID, PlayerID, DraftKingsPlayerID, DraftKingsName, DraftKingsSalary) VALUES (?, ?, ?, ?, ?)', (
-                    tournament_id,
-                    player_profile['PlayerID'],
-                    player_profile['DraftKingsPlayerID'],
-                    player_profile['DraftKingsName'],
-                    player.salary,
-                ))
-            else:
-                print('WTF {}'.format(player.name_details.display))
+# def populate_salaries_table(tournament_id):
+#     tournament = get_tournament_from_id(tournament_id)
+#     if tournament is None:
+#         return
 
-        conn.commit()
-        conn.close()
+#     player_profiles = load_player_profiles()
 
-        break
+#     contests = Client().contests(sport=Sport.GOLF)
+#     for draft_group in contests.draft_groups:
+#         draft_group_details = Client().draft_group_details(draft_group_id=draft_group.draft_group_id)
+
+#         # print('{}         {}'.format(draft_group_details.games[0].name, tournament['Name']))
+#         # if draft_group_details.games[0].name != 'Arnold Palmer Invitational presented by Mastercard':
+#         if draft_group_details.games[0].name != tournament['Name']:
+#             continue
+#         if draft_group_details.leagues[0].abbreviation != 'PGA':
+#             continue
+#         game_type_rules = Client().game_type_rules(game_type_id=draft_group_details.contest_details.type_id)
+#         if not game_type_rules.salary_cap_details.is_enabled or int(game_type_rules.salary_cap_details.maximum_value) != 50000:
+#             continue
+
+#         draftables = Client().draftables(draft_group_id=draft_group_details.draft_group_id)
+
+#         conn = get_db_connection()
+#         curr = conn.cursor()
+
+#         for player in draftables.players:
+#             player_profile = get_player_profile(draft_kings_player_id=player.player_id, player_profiles=player_profiles)
+
+#             if player_profile is not None:
+#                 if player.name_details.display != player_profile['DraftKingsName']:
+#                     print('Player names do not match {} vs {}'.format(player.name_details.display, player_profile['DraftKingsName']))
+
+#                 curr.execute('INSERT INTO salaries (TournamentID, PlayerID, DraftKingsPlayerID, DraftKingsName, DraftKingsSalary) VALUES (?, ?, ?, ?, ?)', (
+#                     tournament_id,
+#                     player_profile['PlayerID'],
+#                     player_profile['DraftKingsPlayerID'],
+#                     player_profile['DraftKingsName'],
+#                     player.salary,
+#                 ))
+#             else:
+#                 print('WTF {}'.format(player.name_details.display))
+
+#         conn.commit()
+#         conn.close()
+
+#         break
 
 # def populate_salaries_table(tournament_id):
 #     # player_profiles = load_player_profiles()
@@ -868,8 +947,155 @@ def update_picks():
     create_picks_table()
     add_picks()
 
+def get_players(tournament_id):
+    player_profiles = load_player_profiles()
+
+    salaries = get_salaries(tournament_id)
+
+    players = []
+    for salary in salaries:
+        player_profile = get_player_profile(player_id=salary['PlayerID'], player_profiles=player_profiles)
+
+        if salary['DraftKingsSalary'] is not None:
+            player = {
+                'DraftKingsName'    : player_profile['DraftKingsName'],
+                'DraftKingsSalary'  : salary['DraftKingsSalary'],
+                'FantasyPoints'     : salary['FantasyPoints'],
+                'Value'             : 1e6 * (float(salary['FantasyPoints']) / float(salary['DraftKingsSalary'])),
+            }
+            players.append(player)
+
+    return players
+
+def get_starting_roster(players):
+    max_fantasy_points = 0
+    max_players = None
+    for i in range(1000000):
+        sys.stdout.write('{}\r'.format(i))
+        sys.stdout.flush()
+
+        selected_players = random.sample(players, NUM_PICKS)
+
+        total_fantasy_points = sum([player['FantasyPoints'] for player in selected_players])
+        total_salary         = sum([player['DraftKingsSalary'] for player in selected_players])
+        if (total_salary <= MAX_SALARY and total_fantasy_points > max_fantasy_points):
+            max_fantasy_points  = total_fantasy_points
+            max_players         = selected_players
+            print('\nTotal Salary: {:5}, Fantasy Points: {:0.3f}, Players: {}'.format(
+                total_salary,
+                total_fantasy_points,
+                ', '.join([player['DraftKingsName'] for player in selected_players])
+            ))
+
+    return max_players
+
+def get_roster(players):
+    starting_roster = get_starting_roster(players)
+
+    print()
+    print()
+    print('Starting Roster')
+    for player in starting_roster:
+        print('{:30}, Salary: {:5}, Value: {:.3f}'.format(player['DraftKingsName'], player['DraftKingsSalary'], player['Value']))
+    print('Points: {:.3f}'.format(sum([player['FantasyPoints'] for player in starting_roster])))
+    print('Salary: {:5}'.format(sum([player['DraftKingsSalary'] for player in starting_roster])))
+    print()
+
+    final_roster = []
+    for player in starting_roster:
+        print('{:30}, Salary: {:5}, Value: {:.3f}'.format(player['DraftKingsName'], player['DraftKingsSalary'], player['Value']))
+
+        prospects = [prospect for prospect in players if prospect['DraftKingsSalary'] == player['DraftKingsSalary']]
+
+        dedup_prospects = []
+        for prospect in prospects:
+            found = False
+
+            if prospect['DraftKingsName'] == player['DraftKingsName']:
+                found = True
+            else:
+                for final_player in final_roster:
+                    if prospect['DraftKingsName'] == final_player['DraftKingsName']:
+                        found = True
+
+            if not found:
+                dedup_prospects.append(prospect)
+
+        prospects = dedup_prospects
+        prospects = sorted(prospects, key=lambda x: x['Value'], reverse=True)
+
+        for prospect in prospects:
+            print('    Prospect: {}, Salary: {:5}, Value: {:.3f}'.format(prospect['DraftKingsName'], prospect['DraftKingsSalary'], prospect['Value']))
+
+        # print(prospects)
+        if (len(prospects) > 0):
+            if prospects[0]['Value'] > player['Value']:
+                final_roster.append(prospects[0])
+            else:
+                final_roster.append(player)
+        else:
+            final_roster.append(player)
+
+    print()
+    print('Final Roster')
+    for player in final_roster:
+        print('{:30}, Salary: {:5}, Value: {:.3f}'.format(player['DraftKingsName'], player['DraftKingsSalary'], player['Value']))
+    print('Total Points: {:.3f}'.format(sum([player['FantasyPoints'] for player in final_roster])))
+    print('Total Salary: {:5}'.format(sum([player['DraftKingsSalary'] for player in final_roster])))
+
+    roster = Roster(final_roster)
+
+    return roster
+
+def autopick(tournament_id, num_rosters):
+    players = get_players(tournament_id)
+
+    rosters = []
+    for _ in range(num_rosters):
+        roster = get_roster(players)
+        rosters.append(roster)
+
+    rosters.sort(key=lambda x: x.total_points, reverse=True)
+
+    print()
+    print('*********************')
+    print('*      ROSTERS      *')
+    print('*********************')
+    print()
+    for roster in rosters:
+        print(roster)
+
+def values(tournament_id):
+    players = get_players(tournament_id)
+    players = sorted(players, key=lambda x: x['Value'], reverse=True)
+
+    table = PrettyTable()
+    table.field_names = ['Player', 'FantasyPoints', 'Salary', 'Value']
+    for player in players:
+        table.add_row([
+            player['DraftKingsName'],
+            player['FantasyPoints'],
+            player['DraftKingsSalary'],
+            '{:.3f}'.format(player['Value']),
+        ])
+    print(table)
+
+def points(tournament_id):
+    players = get_players(tournament_id)
+    players = sorted(players, key=lambda x: x['FantasyPoints'], reverse=True)
+
+    table = PrettyTable()
+    table.field_names = ['Player', 'FantasyPoints', 'Salary', 'Value']
+    for player in players:
+        table.add_row([
+            player['DraftKingsName'],
+            player['FantasyPoints'],
+            player['DraftKingsSalary'],
+            '{:.3f}'.format(player['Value']),
+        ])
+    print(table)
+
 def sandbox():
-    print(PICKS)
     pass
 
 def main():
@@ -891,6 +1117,19 @@ def main():
         create_tournaments_table()
         populate_tournaments_table()
 
+    elif args.cmd == 'salaries':
+        create_salaries_table()
+        populate_salaries_table(TOURNAMENT_ID)
+
+    elif args.cmd == 'autopick':
+        autopick(TOURNAMENT_ID, args.num_rosters)
+
+    elif args.cmd == 'values':
+        values(TOURNAMENT_ID)
+
+    elif args.cmd == 'points':
+        points(TOURNAMENT_ID)
+
     elif args.cmd == 'picks':
         update_picks()
 
@@ -899,7 +1138,8 @@ def main():
         update_leaderboard(TOURNAMENT_ID)
 
     elif args.cmd == 'flask':
-        app.run(host='0.0.0.0', port=80, debug=True)
+        # app.run(host='0.0.0.0', port=80, debug=True)
+        app.run(host='0.0.0.0', port=80, debug=False)
 
     elif args.cmd == 'sandbox':
         sandbox()
