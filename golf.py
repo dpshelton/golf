@@ -4,7 +4,7 @@ import sys
 import argparse
 import requests
 import json
-from pprint import pprint, pformat
+from pprint import pprint
 from datetime import datetime, timedelta
 import time
 import inspect
@@ -12,11 +12,9 @@ from prettytable import PrettyTable
 import sqlite3
 from flask import Flask, escape, request, render_template
 from draft_kings import Sport, Client
-import copy
 import random
-import pandas as pd
 
-TOURNAMENT_ID   = 487
+TOURNAMENT_ID   = 503
 MAJOR           = True
 
 MAX_SALARY      = 50000
@@ -24,53 +22,53 @@ NUM_PICKS       = 6
 
 PICKS = {
     'Ben': [
-        'Corey Conners',
-        'Chris Kirk',
-        'Gary Woodland',
-        'Nick Taylor',
-        'Matthew NeSmith',
-        'Beau Hossler',
+        'Collin Morikawa',
+        'Xander Schauffele',
+        'Tommy Fleetwood',
+        'Robert Macintyre',
+        'Cameron Tringale',
+        'John Parry',
     ],
     'Greg': [
-        'Rory McIlroy',
-        'Corey Conners',
-        'Luke List',
-        'Nick Taylor',
-        'Matthew NeSmith',
-        'Paul Barjon',
+        'Justin Thomas',
+        'Cameron Smith',
+        'Patrick Cantlay',
+        'Harris English',
+        'Chris Kirk',
+        'Dylan Frittelli',
     ],
     'Mike': [
-        'Rory McIlroy',
+        'Jordan Spieth',
+        'Will Zalatoris',
+        'Tommy Fleetwood',
+        'Max Homa',
+        'Ryan Fox',
         'Chris Kirk',
-        'Adam Hadwin',
-        'Patton Kizzire',
-        'Peter Uihlein',
-        'Lee Hodges',
     ],
     'Don': [
-        'Jordan Spieth',
-        'Mito Pereira',
-        'Bryson DeChambeau',
-        'Charley Hoffman',
-        'Matt Wallace',
-        'Brandt Snedeker',
+        'Rory McIlroy',
+        'Scottie Scheffler',
+        'Keegan Bradley',
+        'Aaron Wise',
+        'Keith Mitchell',
+        'Chris Kirk',
     ],
-    'Sean': [
-        'Corey Conners',
-        'Jordan Spieth',
-        'Luke List',
-        'Lanto Griffin',
-        'Lee Westwood',
-        'Garrick Higgo',
-    ],
+    # 'Sean': [
+    #     '',
+    #     '',
+    #     '',
+    #     '',
+    #     '',
+    #     '',
+    # ],
 }
 
 ONE_N_DONES = {
-    'Ben' : 'Chris Kirk',
-    'Greg': 'Corey Conners',
-    'Mike': 'Chris Kirk',
-    'Don' : 'Jordan Spieth',
-    'Sean': 'Jordan Spieth',
+    'Ben' : 'Matt Fitzpatrick',
+    'Greg': 'Shane Lowry',
+    'Mike': 'Tommy Fleetwood',
+    'Don' : 'Shane Lowry',
+    # 'Sean': '',
 }
 
 KEY = 'a478d29a98e54eac8e9ebf1f218dd0b8'
@@ -133,7 +131,7 @@ OWNERS = [
     'Greg',
     'Mike',
     'Don',
-    'Sean',
+    # 'Sean',
 ]
 
 BASE_URL = 'https://fly.sportsdata.io'
@@ -413,7 +411,7 @@ def populate_salaries_table(tournament_id):
                         player_profile['DraftKingsPlayerID'],
                         player_profile['DraftKingsName'],
                         player['OperatorSalary'],
-                        fantasy_points.get(player_profile['PlayerID'], None),
+                        fantasy_points.get(player_profile['PlayerID'], 0),
                     ))
                 else:
                     print('WTF {}'.format(player['OperatorPlayerName']))
@@ -639,9 +637,9 @@ def results():
                 else:
                     standing['Rank']
                     if pick['OneAndDone']:
-                        totals[owner] += int(standing['OneAndDonePoints'])
+                        totals[owner] += float(standing['OneAndDonePoints']) if MAJOR else int(standing['OneAndDonePoints'])
                     else:
-                        totals[owner] += int(standing['Points'])
+                        totals[owner] += float(standing['Points']) if MAJOR else int(standing['Points'])
                     edited_picks[owner].append({
                         'DraftKingsName'    : player_profile['DraftKingsName'],
                         'Rank'              : standing['Rank'],
@@ -665,41 +663,41 @@ def tournaments():
         past_tournaments        = past_tournaments,
     )
 
-@app.route('/picks')
-def picks():
-    tournament_id = request.args.get('tournamentid')
+# @app.route('/picks')
+# def picks():
+#     tournament_id = request.args.get('tournamentid')
 
-    active_tournaments, upcoming_tournaments, past_tournaments, relevant_tournaments = get_tournaments()
+#     active_tournaments, upcoming_tournaments, past_tournaments, relevant_tournaments = get_tournaments()
 
-    selected_tournament = None
-    if tournament_id is not None:
-        for tournament in relevant_tournaments:
-            if int(tournament_id) == int(tournament['TournamentID']):
-                selected_tournament = tournament
-                break
+#     selected_tournament = None
+#     if tournament_id is not None:
+#         for tournament in relevant_tournaments:
+#             if int(tournament_id) == int(tournament['TournamentID']):
+#                 selected_tournament = tournament
+#                 break
 
-    if selected_tournament is None:
-        selected_string = 'Select a tournament'
-        salaries = []
-    else:
-        selected_string = '{} - {}'.format(tournament['Name'], tournament['StartDate'])
-        salaries = get_salaries(selected_tournament['TournamentID'])
-        player_profiles = load_player_profiles()
+#     if selected_tournament is None:
+#         selected_string = 'Select a tournament'
+#         salaries = []
+#     else:
+#         selected_string = '{} - {}'.format(tournament['Name'], tournament['StartDate'])
+#         salaries = get_salaries(selected_tournament['TournamentID'])
+#         player_profiles = load_player_profiles()
 
-    players = []
-    for salary in salaries:
-        player_profile = get_player_profile(player_id=salary['PlayerID'], player_profiles=player_profiles)
+#     players = []
+#     for salary in salaries:
+#         player_profile = get_player_profile(player_id=salary['PlayerID'], player_profiles=player_profiles)
 
-        if salary['DraftKingsSalary'] is not None:
-            players.append({
-                'DraftKingsName': player_profile['DraftKingsName'],
-                'DraftKingsSalary': salary['DraftKingsSalary'],
-            })
+#         if salary['DraftKingsSalary'] is not None:
+#             players.append({
+#                 'DraftKingsName': player_profile['DraftKingsName'],
+#                 'DraftKingsSalary': salary['DraftKingsSalary'],
+#             })
 
-    if len(players) > 0:
-        players = sorted(players, key=lambda x: x['DraftKingsSalary'], reverse=True)
+#     if len(players) > 0:
+#         players = sorted(players, key=lambda x: x['DraftKingsSalary'], reverse=True)
 
-    return render_template('picks.html', players=players, tournaments=relevant_tournaments, tournamentid=tournament_id, selected_string=selected_string)
+#     return render_template('picks.html', players=players, tournaments=relevant_tournaments, tournamentid=tournament_id, selected_string=selected_string)
 
 def create_leaderboard_table():
     conn = get_db_connection()
@@ -1138,8 +1136,8 @@ def main():
         update_leaderboard(TOURNAMENT_ID)
 
     elif args.cmd == 'flask':
-        # app.run(host='0.0.0.0', port=80, debug=True)
-        app.run(host='0.0.0.0', port=80, debug=False)
+        app.run(host='0.0.0.0', port=80, debug=True)
+        # app.run(host='0.0.0.0', port=80, debug=False)
 
     elif args.cmd == 'sandbox':
         sandbox()
