@@ -10,9 +10,11 @@ import time
 import inspect
 from prettytable import PrettyTable
 import sqlite3
-from flask import Flask, escape, request, render_template
+from flask import Flask, escape, request, render_template, Blueprint, redirect, url_for
+from flask_login import UserMixin, AnonymousUserMixin, login_required, LoginManager, login_user, logout_user
 from draft_kings import Sport, Client
 import random
+from werkzeug.security import generate_password_hash, check_password_hash
 
 TOURNAMENT_ID   = 503
 MAJOR           = True
@@ -137,6 +139,10 @@ OWNERS = [
 BASE_URL = 'https://fly.sportsdata.io'
 
 app = Flask(__name__)
+app.secret_key = 'key'
+
+login_manager = LoginManager()
+login_manager.init_app(app)
 
 class Roster():
     def __init__(self, players):
@@ -161,6 +167,9 @@ class Roster():
                 player['Value'],
             )
         return string
+
+class User(UserMixin):
+  pass
 
 def parse_args():
     description = 'Fantasy Golf Tool'
@@ -698,6 +707,49 @@ def tournaments():
 #         players = sorted(players, key=lambda x: x['DraftKingsSalary'], reverse=True)
 
 #     return render_template('picks.html', players=players, tournaments=relevant_tournaments, tournamentid=tournament_id, selected_string=selected_string)
+
+@app.route('/login')
+def login():
+    return render_template('login.html')
+
+@app.route('/login', methods=['POST'])
+def login_post():
+    auth_password = 'springs'
+
+    password = request.form.get('password')
+
+    hash = generate_password_hash(password, method='sha256')
+
+    print(password)
+    print(hash)
+
+    if check_password_hash(hash, auth_password):
+        print('success!')
+        user = User()
+        user.id = 'gt'
+        login_user(user, remember=True)
+        return redirect(url_for('scorecard'))
+    else:
+        print('failure!')
+
+    # return redirect(url_for('auth.login'))
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    logout_user()
+    return render_template('index.html')
+
+@app.route("/scorecard")
+@login_required
+def scorecard():
+    return render_template('scorecard.html')
+
+@login_manager.user_loader
+def user_loader(username='gt'):
+    user = User()
+    user.id = username
+    return user
 
 def create_leaderboard_table():
     conn = get_db_connection()
