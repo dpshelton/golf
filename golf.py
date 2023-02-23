@@ -14,61 +14,61 @@ from flask import Flask, escape, request, render_template
 from draft_kings import Sport, Client
 import random
 
-TOURNAMENT_ID   = 503
-MAJOR           = True
+TOURNAMENT_ID   = 533
+MAJOR           = False
 
 MAX_SALARY      = 50000
 NUM_PICKS       = 6
 
 PICKS = {
     'Ben': [
-        'Collin Morikawa',
-        'Xander Schauffele',
-        'Tommy Fleetwood',
-        'Robert Macintyre',
-        'Cameron Tringale',
-        'John Parry',
+        'Rory McIlroy',
+        'Max Homa',
+        'Will Zalatoris',
+        'Corey Conners',
+        'Tom Hoge',
+        'Doug Ghim',
     ],
     'Greg': [
         'Justin Thomas',
-        'Cameron Smith',
-        'Patrick Cantlay',
-        'Harris English',
-        'Chris Kirk',
-        'Dylan Frittelli',
+        'Tony Finau',
+        'Jordan Spieth',
+        'Tyrrell Hatton',
+        'Adam Hadwin',
+        'Kevin Tway',
     ],
     'Mike': [
-        'Jordan Spieth',
+        'Justin Thomas',
+        'Patrick Cantlay',
         'Will Zalatoris',
+        'Wyndham Clark',
         'Tommy Fleetwood',
-        'Max Homa',
-        'Ryan Fox',
-        'Chris Kirk',
+        'Patrick Rodgers',
     ],
     'Don': [
-        'Rory McIlroy',
-        'Scottie Scheffler',
-        'Keegan Bradley',
-        'Aaron Wise',
-        'Keith Mitchell',
-        'Chris Kirk',
+        'Jon Rahm',
+        'Collin Morikawa',
+        'Jason Day',
+        'Tommy Fleetwood',
+        'Tiger Woods',
+        'Kevin Kisner',
     ],
-    # 'Sean': [
-    #     '',
-    #     '',
-    #     '',
-    #     '',
-    #     '',
-    #     '',
-    # ],
+    'Sean': [
+        'Scottie Scheffler',
+        'Justin Thomas',
+        'Jordan Spieth',
+        'Billy Horschel',
+        'Nick Taylor',
+        'J.B. Holmes',
+    ],
 }
 
 ONE_N_DONES = {
-    'Ben' : 'Matt Fitzpatrick',
-    'Greg': 'Shane Lowry',
-    'Mike': 'Tommy Fleetwood',
-    'Don' : 'Shane Lowry',
-    # 'Sean': '',
+    'Ben' : '',
+    'Greg': '',
+    'Mike': '',
+    'Don' : '',
+    'Sean': '',
 }
 
 KEY = 'a478d29a98e54eac8e9ebf1f218dd0b8'
@@ -97,20 +97,24 @@ CMDS = [
 ]
 
 POINTS = [
-    (1 , 1   , 100),
+    (1 , 1   , 150),
     (2 , 2   , 75 ),
     (3 , 3   , 50 ),
-    (4 , 4   , 30 ),
-    (5 , 5   , 25 ),
-    (6 , 6   , 20 ),
-    (7 , 7   , 18 ),
-    (8 , 8   , 16 ),
-    (9 , 9   , 14 ),
-    (10, 10  , 12 ),
-    (11, 20  , 10 ),
-    (21, 30  , 8  ),
-    (31, 40  , 7  ),
-    (41, 1000, 5  ),
+    (4 , 4   , 35 ),
+    (5 , 5   , 30 ),
+    (6 , 6   , 25 ),
+    (7 , 7   , 20 ),
+    (8 , 8   , 18 ),
+    (9 , 9   , 16 ),
+    (10, 10  , 14 ),
+    (11, 15  , 12 ),
+    (16, 20  , 10 ),
+    (21, 25  , 8  ),
+    (26, 30  , 7  ),
+    (31, 40  , 6  ),
+    (41, 50  , 5  ),
+    (51, 60  , 4  ),
+    (61, 1000, 3  ),
 ]
 
 ONE_N_DONE_POINTS = [
@@ -131,7 +135,7 @@ OWNERS = [
     'Greg',
     'Mike',
     'Don',
-    # 'Sean',
+    'Sean',
 ]
 
 BASE_URL = 'https://fly.sportsdata.io'
