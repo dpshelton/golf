@@ -138,7 +138,7 @@ OWNERS = [
     'Sean',
 ]
 
-BASE_URL = 'https://fly.sportsdata.io'
+BASE_URL = 'https://api.sportsdata.io'
 
 app = Flask(__name__)
 
@@ -187,7 +187,6 @@ def api_request(url):
 
 def api_get_all_players():
     print('API-CALL: {}'.format(inspect.currentframe().f_code.co_name))
-    print('{}'.format(BASE_URL + '/golf/v2/json/Players'))
     return api_request(BASE_URL + '/golf/v2/json/Players')
 
 def api_get_all_tournaments():
