@@ -619,6 +619,10 @@ def get_last_updated_str(last_updated):
 
     return last_updated_str, delta_time.total_seconds()
 
+def get_seconds_since_tee_time(tee_time):
+    delta_time = datetime.now() - tee_time
+    return delta_time.total_seconds()
+
 @app.route('/results')
 def results():
     # tournament_id = request.args.get('tournamentid')
@@ -635,7 +639,10 @@ def results():
     leaderboard = [dict(row) for row in leaderboard]
     for player in leaderboard:
         if player['TeeTime'] is not None and player['TeeTime'] != 'None':
+            player['SecondsSinceTeeTime'] = get_seconds_since_tee_time(convert_tee_time(player['TeeTime']))
             player['TeeTime'] = get_time_str(convert_tee_time(player['TeeTime']))
+            if (player['TotalThrough'] is None or player['TotalThrough'] == 'None') and player['SecondsSinceTeeTime'] > 3600:
+                player['TotalThrough'] = 'F'
 
     player_profiles = load_player_profiles()
     picks = get_picks(tournament_id)
@@ -656,14 +663,15 @@ def results():
                 totals[owner] += 0
 
                 edited_picks[owner].append({
-                    'DraftKingsName'    : player_profile['DraftKingsName'],
-                    'Rank'              : None,
-                    'Points'            : 0,
-                    'OneAndDonePoints'  : 0,
-                    'PhotoUrl'          : '/static/natalie.jpg',
-                    'OneAndDone'        : pick['OneAndDone'],
-                    'TotalThrough'      : 'None',
-                    'TeeTime'           : 'None',
+                    'DraftKingsName'        : player_profile['DraftKingsName'],
+                    'Rank'                  : None,
+                    'Points'                : 0,
+                    'OneAndDonePoints'      : 0,
+                    'PhotoUrl'              : '/static/natalie.jpg',
+                    'OneAndDone'            : pick['OneAndDone'],
+                    'TotalThrough'          : 'None',
+                    'TeeTime'               : 'None',
+                    'SecondsSinceTeeTime'   : 'None',
                 })
             else:
                 standing = get_player_standing(pick['PlayerID'], leaderboard)
@@ -679,14 +687,15 @@ def results():
                     else:
                         totals[owner] += int(standing['Points'])
                     edited_picks[owner].append({
-                        'DraftKingsName'    : player_profile['DraftKingsName'],
-                        'Rank'              : standing['Rank'],
-                        'Points'            : standing['Points'],
-                        'OneAndDonePoints'  : standing['OneAndDonePoints'],
-                        'PhotoUrl'          : player_profile['PhotoUrl'],
-                        'OneAndDone'        : pick['OneAndDone'],
-                        'TotalThrough'      : player['TotalThrough'],
-                        'TeeTime'           : player['TeeTime'],
+                        'DraftKingsName'        : player_profile['DraftKingsName'],
+                        'Rank'                  : standing['Rank'],
+                        'Points'                : standing['Points'],
+                        'OneAndDonePoints'      : standing['OneAndDonePoints'],
+                        'PhotoUrl'              : player_profile['PhotoUrl'],
+                        'OneAndDone'            : pick['OneAndDone'],
+                        'TotalThrough'          : player['TotalThrough'],
+                        'TeeTime'               : player['TeeTime'],
+                        'SecondsSinceTeeTime'   : player['SecondsSinceTeeTime'],
                     })
 
     totals = dict(sorted(totals.items(), key=lambda item: item[1], reverse=True))
@@ -1155,8 +1164,9 @@ def points(tournament_id):
 
 def sandbox():
     # leaderboard, last_updated = get_leaderboard(TOURNAMENT_ID)
-    # # for player in leaderboard:
-    # #     print(player['TotalThrough'])
+    leaderboard = api_get_leaderboard(TOURNAMENT_ID)
+    for player in leaderboard['Players']:
+        pprint(player)
     # #     print(player['TeeTime'])
 
 
@@ -1171,23 +1181,23 @@ def sandbox():
     #     print(player['TeeTime'])
     #     print(player['PlayerID'])
 
-    leaderboard, last_updated = get_leaderboard(TOURNAMENT_ID)
-    last_updated_str, total_seconds = get_last_updated_str(last_updated)
+    # leaderboard, last_updated = get_leaderboard(TOURNAMENT_ID)
+    # last_updated_str, total_seconds = get_last_updated_str(last_updated)
 
-    # Convert and simplify tee times
-    leaderboard = [dict(row) for row in leaderboard]
-    for player in leaderboard:
-        if player['TeeTime'] is not None and player['TeeTime'] != 'None':
-            player['TeeTime'] = get_time_str(convert_tee_time(player['TeeTime']))
+    # # Convert and simplify tee times
+    # leaderboard = [dict(row) for row in leaderboard]
+    # for player in leaderboard:
+    #     if player['TeeTime'] is not None and player['TeeTime'] != 'None':
+    #         player['TeeTime'] = get_time_str(convert_tee_time(player['TeeTime']))
 
 
-    picks = get_picks(TOURNAMENT_ID)
-    for pick in picks['Don']:
-        for player in leaderboard:
-            print(pick['PlayerID'], player['PlayerID'])
-            if int(pick['PlayerID']) == int(player['PlayerID']):
-                print('MATCH')
-                # print(pick['PlayerID'])
+    # picks = get_picks(TOURNAMENT_ID)
+    # for pick in picks['Don']:
+    #     for player in leaderboard:
+    #         print(pick['PlayerID'], player['PlayerID'])
+    #         if int(pick['PlayerID']) == int(player['PlayerID']):
+    #             print('MATCH')
+    #             # print(pick['PlayerID'])
 
         # print(player['PlayerID'])
 
