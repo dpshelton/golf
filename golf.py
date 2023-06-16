@@ -635,7 +635,7 @@ def results():
     leaderboard, last_updated = get_leaderboard(tournament_id)
     last_updated_str, total_seconds = get_last_updated_str(last_updated)
 
-    # Convert and simplify tee times
+    # Convert and simplify tee times, and calculate F for TotalThrough (since it's not provided by the API.
     leaderboard = [dict(row) for row in leaderboard]
     for player in leaderboard:
         if player['TeeTime'] is not None and player['TeeTime'] != 'None':
