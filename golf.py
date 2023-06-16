@@ -295,6 +295,8 @@ def parse_leaderboard(leaderboard, player_profiles):
                 'DraftKingsName'    : player_profile['DraftKingsName'],
                 'Points'            : str(get_points(rank, one_n_done=False, major=MAJOR)),
                 'OneAndDonePoints'  : str(get_points(rank, one_n_done=True , major=MAJOR)),
+                'TotalThrough'      : player['TotalThrough'] if player['TotalThrough'] is not None else "None",
+                'TeeTime'           : player['TeeTime'] if player['TeeTime'] is not None else "None",
             })
         else:
             rank = None
@@ -306,6 +308,8 @@ def parse_leaderboard(leaderboard, player_profiles):
                 'DraftKingsName'    : player_profile['DraftKingsName'],
                 'Points'            : str(get_points(rank, one_n_done=False, major=MAJOR)),
                 'OneAndDonePoints'  : str(get_points(rank, one_n_done=True , major=MAJOR)),
+                'TotalThrough'      : player['TotalThrough'] if player['TotalThrough'] is not None else "None",
+                'TeeTime'           : player['TeeTime'] if player['TeeTime'] is not None else "None",
             })
 
     return ranked_leaderboard + unranked_leaderboard
@@ -600,6 +604,21 @@ def get_player_standing(player_id, leaderboard):
 
     return None
 
+def get_last_updated_str(last_updated):
+    delta_time = datetime.now() - datetime.fromisoformat(last_updated['LeaderboardLastUpdated'])
+
+    hours, remainder = divmod(delta_time.total_seconds(), 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    if hours == 0 and minutes == 0:
+        last_updated_str = 'Updated {}s ago'.format(int(seconds))
+    elif hours == 0:
+        last_updated_str = 'Updated {}m{}s ago'.format(int(minutes), int(seconds))
+    else:
+        last_updated_str = 'Updated {}h{}m{}s ago'.format(int(hours), int(minutes), int(seconds))
+
+    return last_updated_str, delta_time.total_seconds()
+
 @app.route('/results')
 def results():
     # tournament_id = request.args.get('tournamentid')
@@ -610,6 +629,13 @@ def results():
         return
 
     leaderboard, last_updated = get_leaderboard(tournament_id)
+    last_updated_str, total_seconds = get_last_updated_str(last_updated)
+
+    # Convert and simplify tee times
+    leaderboard = [dict(row) for row in leaderboard]
+    for player in leaderboard:
+        if player['TeeTime'] is not None and player['TeeTime'] != 'None':
+            player['TeeTime'] = get_time_str(convert_tee_time(player['TeeTime']))
 
     player_profiles = load_player_profiles()
     picks = get_picks(tournament_id)
@@ -622,6 +648,10 @@ def results():
         for pick in picks[owner]:
             player_profile = get_player_profile(player_id=pick['PlayerID'], player_profiles=player_profiles)
 
+            for player in leaderboard:
+                if int(player['PlayerID']) == int(pick['PlayerID']):
+                    break
+
             if player_profile['DraftKingsName'] == 'Natalie Shelton':
                 totals[owner] += 0
 
@@ -632,13 +662,14 @@ def results():
                     'OneAndDonePoints'  : 0,
                     'PhotoUrl'          : '/static/natalie.jpg',
                     'OneAndDone'        : pick['OneAndDone'],
+                    'TotalThrough'      : 'None',
+                    'TeeTime'           : 'None',
                 })
             else:
                 standing = get_player_standing(pick['PlayerID'], leaderboard)
                 if standing is None:
                     print('Failed to find {} ({}) in leaderboard'.format(player_profile['DraftKingsName'], pick['PlayerID']))
                 else:
-                    standing['Rank']
                     # if pick['OneAndDone']:
                     #     totals[owner] += float(standing['OneAndDonePoints']) if MAJOR else int(standing['OneAndDonePoints'])
                     # else:
@@ -654,11 +685,13 @@ def results():
                         'OneAndDonePoints'  : standing['OneAndDonePoints'],
                         'PhotoUrl'          : player_profile['PhotoUrl'],
                         'OneAndDone'        : pick['OneAndDone'],
+                        'TotalThrough'      : player['TotalThrough'],
+                        'TeeTime'           : player['TeeTime'],
                     })
 
     totals = dict(sorted(totals.items(), key=lambda item: item[1], reverse=True))
 
-    return render_template('results.html', leaderboard=leaderboard, picks=edited_picks, totals=totals, owners=OWNERS, last_updated=last_updated, tournament=tournament)
+    return render_template('results.html', leaderboard=leaderboard, picks=edited_picks, totals=totals, owners=OWNERS, last_updated=last_updated_str, total_seconds=total_seconds, tournament=tournament)
 
 @app.route('/tournaments')
 def tournaments():
@@ -720,7 +753,9 @@ def create_leaderboard_table():
             DraftKingsName TEXT NOT NULL,
             Points TEXT NOT NULL,
             OneAndDonePoints TEXT NOT NULL,
-            Position INTEGER NOT NULL
+            Position INTEGER NOT NULL,
+            TotalThrough TEXT,
+            TeeTime TEXT
         );
     ''')
     conn.commit()
@@ -741,7 +776,7 @@ def update_leaderboard(tournament_id, leaderboard=None):
             player['PlayerID']
         )).fetchall()
         if len(db_player) == 0:
-            curr.execute('INSERT INTO leaderboards (TournamentID, PlayerID, Rank, DraftKingsPlayerID, DraftKingsName, Points, OneAndDonePoints, Position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', (
+            curr.execute('INSERT INTO leaderboards (TournamentID, PlayerID, Rank, DraftKingsPlayerID, DraftKingsName, Points, OneAndDonePoints, Position, TotalThrough, TeeTime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', (
                 tournament_id,
                 player['PlayerID'],
                 player['Rank'],
@@ -750,13 +785,17 @@ def update_leaderboard(tournament_id, leaderboard=None):
                 player['Points'],
                 player['OneAndDonePoints'],
                 position,
+                player['TotalThrough'],
+                player['TeeTime'],
             ))
         else:
-            curr.execute('UPDATE leaderboards SET Rank=?, Points=?, OneAndDonePoints=?, Position=? WHERE TournamentID==? AND PlayerID==?', (
+            curr.execute('UPDATE leaderboards SET Rank=?, Points=?, OneAndDonePoints=?, Position=?, TotalThrough=?, TeeTime=? WHERE TournamentID==? AND PlayerID==?', (
                 player['Rank'],
                 player['Points'],
                 player['OneAndDonePoints'],
                 position,
+                player['TotalThrough'],
+                player['TeeTime'],
                 tournament_id,
                 player['PlayerID'],
             ))
@@ -853,9 +892,22 @@ def get_picks(tournament_id):
 def convert_tee_time(tee_time):
     if tee_time is not None:
         # Tee times are EST
-        tee_time = datetime.fromisoformat(tee_time) - timedelta(hours=3)
+        if type(tee_time) == datetime:
+            tee_time = tee_time - timedelta(hours=3)
+        elif type(tee_time) == str and tee_time != 'None':
+            tee_time = datetime.fromisoformat(tee_time) - timedelta(hours=3)
 
     return tee_time
+
+def get_time_str(datetime_str):
+    time_str = 'None'
+
+    if type(datetime_str) == datetime:
+        time_str = datetime_str.strftime('%-I:%M %p')
+    elif datetime_str is not None and datetime_str != 'None':
+        time_str = datetime.fromisoformat(datetime_str).strftime('%-I:%M %p')
+
+    return time_str
 
 def get_first_tee_time(leaderboard, round_num):
     first_tee_time = None
@@ -1102,7 +1154,43 @@ def points(tournament_id):
     print(table)
 
 def sandbox():
-    pass
+    # leaderboard, last_updated = get_leaderboard(TOURNAMENT_ID)
+    # # for player in leaderboard:
+    # #     print(player['TotalThrough'])
+    # #     print(player['TeeTime'])
+
+
+    # dictrows = [dict(row) for row in leaderboard]
+
+    # for player in dictrows:
+    #     print(player['TeeTime'])
+    #     print(get_time_str(convert_tee_time(player['TeeTime'])))
+    #     player['TeeTime'] = get_time_str(convert_tee_time(player['TeeTime']))
+
+    # for player in dictrows:
+    #     print(player['TeeTime'])
+    #     print(player['PlayerID'])
+
+    leaderboard, last_updated = get_leaderboard(TOURNAMENT_ID)
+    last_updated_str, total_seconds = get_last_updated_str(last_updated)
+
+    # Convert and simplify tee times
+    leaderboard = [dict(row) for row in leaderboard]
+    for player in leaderboard:
+        if player['TeeTime'] is not None and player['TeeTime'] != 'None':
+            player['TeeTime'] = get_time_str(convert_tee_time(player['TeeTime']))
+
+
+    picks = get_picks(TOURNAMENT_ID)
+    for pick in picks['Don']:
+        for player in leaderboard:
+            print(pick['PlayerID'], player['PlayerID'])
+            if int(pick['PlayerID']) == int(player['PlayerID']):
+                print('MATCH')
+                # print(pick['PlayerID'])
+
+        # print(player['PlayerID'])
+
 
 def main():
     args = parse_args()
