@@ -13,6 +13,7 @@ import sqlite3
 from flask import Flask, escape, request, render_template
 from draft_kings import Sport, Client
 import random
+import operator
 
 TOURNAMENT_ID   = 551
 MAJOR           = True
@@ -688,7 +689,7 @@ def results():
                         totals[owner] += int(standing['Points'])
                     edited_picks[owner].append({
                         'DraftKingsName'        : player_profile['DraftKingsName'],
-                        'Rank'                  : standing['Rank'],
+                        'Rank'                  : int(standing['Rank']),
                         'Points'                : standing['Points'],
                         'OneAndDonePoints'      : standing['OneAndDonePoints'],
                         'PhotoUrl'              : player_profile['PhotoUrl'],
@@ -697,6 +698,9 @@ def results():
                         'TeeTime'               : player['TeeTime'],
                         'SecondsSinceTeeTime'   : player['SecondsSinceTeeTime'],
                     })
+
+        # edited_picks[owner] = dict(sorted(totals.items(), key=lambda item: item[1], reverse=True))
+        edited_picks[owner] = sorted(edited_picks[owner], key=operator.itemgetter('Rank'))
 
     totals = dict(sorted(totals.items(), key=lambda item: item[1], reverse=True))
 
