@@ -613,9 +613,9 @@ def get_last_updated_str(last_updated):
     if hours == 0 and minutes == 0:
         last_updated_str = 'Updated {}s ago'.format(int(seconds))
     elif hours == 0:
-        last_updated_str = 'Updated {}m{}s ago'.format(int(minutes), int(seconds))
+        last_updated_str = 'Updated {}m {}s ago'.format(int(minutes), int(seconds))
     else:
-        last_updated_str = 'Updated {}h{}m{}s ago'.format(int(hours), int(minutes), int(seconds))
+        last_updated_str = 'Updated {}h {}m {}s ago'.format(int(hours), int(minutes), int(seconds))
 
     return last_updated_str, delta_time.total_seconds()
 
@@ -903,9 +903,9 @@ def get_time_str(datetime_str):
     time_str = 'None'
 
     if type(datetime_str) == datetime:
-        time_str = datetime_str.strftime('%-I:%M %p')
+        time_str = datetime_str.strftime('%-I:%M%p')
     elif datetime_str is not None and datetime_str != 'None':
-        time_str = datetime.fromisoformat(datetime_str).strftime('%-I:%M %p')
+        time_str = datetime.fromisoformat(datetime_str).strftime('%-I:%M%p')
 
     return time_str
 
