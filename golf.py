@@ -14,52 +14,52 @@ from flask import Flask, escape, request, render_template
 from draft_kings import Sport, Client
 import random
 
-TOURNAMENT_ID   = 533
-MAJOR           = False
+TOURNAMENT_ID   = 551
+MAJOR           = True
 
 MAX_SALARY      = 50000
 NUM_PICKS       = 6
 
 PICKS = {
     'Ben': [
-        'Rory McIlroy',
-        'Max Homa',
-        'Will Zalatoris',
-        'Corey Conners',
-        'Tom Hoge',
-        'Doug Ghim',
+        'Viktor Hovland',
+        'Jordan Spieth',
+        'Sungjae Im',
+        'Tommy Fleetwood',
+        'Rickie Fowler',
+        'Eric Cole',
     ],
     'Greg': [
-        'Justin Thomas',
-        'Tony Finau',
-        'Jordan Spieth',
+        'Xander Schauffele',
+        'Collin Morikawa',
         'Tyrrell Hatton',
-        'Adam Hadwin',
-        'Kevin Tway',
+        'Hideki Matsuyama',
+        'Mito Pereira',
+        'Dylan Wu',
     ],
     'Mike': [
-        'Justin Thomas',
-        'Patrick Cantlay',
-        'Will Zalatoris',
+        'Xander Schauffele',
+        'Jordan Spieth',
+        'Tony Finau',
+        'Justin Rose',
         'Wyndham Clark',
-        'Tommy Fleetwood',
-        'Patrick Rodgers',
+        'Mito Pereira',
     ],
     'Don': [
-        'Jon Rahm',
-        'Collin Morikawa',
-        'Jason Day',
-        'Tommy Fleetwood',
-        'Tiger Woods',
-        'Kevin Kisner',
+        'Scottie Scheffler',
+        'Rickie Fowler',
+        'Wyndham Clark',
+        'Denny McCarthy',
+        'Xander Schauffele',
+        'Adam Schenk',
     ],
     'Sean': [
+        'Brooks Koepka',
         'Scottie Scheffler',
-        'Justin Thomas',
-        'Jordan Spieth',
-        'Billy Horschel',
-        'Nick Taylor',
-        'J.B. Holmes',
+        'Xander Schauffele',
+        'Jesse Schutte',
+        'Christian Cavaliere',
+        'Ryutaro Nagano',
     ],
 }
 
@@ -77,8 +77,8 @@ START_DAY_WINDOW            = 4
 END_DAY_WINDOW              = 1
 PLAYERS_FILENAME            = 'player_profiles.json'
 LEADERBOARD_UPDATE_PERIOD   = 10 * 60
-ROUND_END_SLEEP_PERIOD      = 6 * 60 * 60
-MAJOR_MULTIPLIER            = 1.5
+ROUND_END_SLEEP_PERIOD      = 1 * 60 * 60
+MAJOR_MULTIPLIER            = 2
 
 CMDS = [
     'players',
@@ -639,10 +639,14 @@ def results():
                     print('Failed to find {} ({}) in leaderboard'.format(player_profile['DraftKingsName'], pick['PlayerID']))
                 else:
                     standing['Rank']
+                    # if pick['OneAndDone']:
+                    #     totals[owner] += float(standing['OneAndDonePoints']) if MAJOR else int(standing['OneAndDonePoints'])
+                    # else:
+                    #     totals[owner] += float(standing['Points']) if MAJOR else int(standing['Points'])
                     if pick['OneAndDone']:
-                        totals[owner] += float(standing['OneAndDonePoints']) if MAJOR else int(standing['OneAndDonePoints'])
+                        totals[owner] += int(standing['OneAndDonePoints'])
                     else:
-                        totals[owner] += float(standing['Points']) if MAJOR else int(standing['Points'])
+                        totals[owner] += int(standing['Points'])
                     edited_picks[owner].append({
                         'DraftKingsName'    : player_profile['DraftKingsName'],
                         'Rank'              : standing['Rank'],
@@ -824,8 +828,8 @@ def add_picks():
         for pick in PICKS[owner]:
             add_pick(owner, TOURNAMENT_ID, pick)
 
-        # Add One-N-Done
-        add_pick(owner, TOURNAMENT_ID, ONE_N_DONES[owner], True)
+        # # Add One-N-Done
+        # add_pick(owner, TOURNAMENT_ID, ONE_N_DONES[owner], True)
 
     conn.commit()
     conn.close()
@@ -883,6 +887,7 @@ def manage_leaderboard(tournament_id, starting_round_num=1):
     round_num = starting_round_num
 
     first_iteration = True
+    fetch_player_profiles()
     leaderboard = api_get_leaderboard(tournament_id)
     num_rounds = len(leaderboard['Tournament']['Rounds'])
 
