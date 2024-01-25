@@ -63,8 +63,10 @@
                     <td class="col-1 align-middle">
                         {% if player["Rank"] != "None" and player["TotalThrough"] != "None" %}
                             {{ player["TotalThrough"] }}
-                        {% else %}
+                        {% elif player["Rank"] != "None" %}
                             {{ player["TeeTime"] }}
+                        {% else %}
+                            -
                         {% endif %}
                     </td>
                 </tr>
@@ -100,8 +102,10 @@
                 <td class="col-1 align-middle">
                     {% if player["Rank"] != "None" and player["TotalThrough"] != "None" %}
                         {{ player["TotalThrough"] }}
-                    {% else %}
+                    {% elif player["Rank"] != "None" %}
                         {{ player["TeeTime"] }}
+                    {% else %}
+                        -
                     {% endif %}
                 </td>
             </tr>

@@ -15,52 +15,52 @@ from draft_kings import Sport, Client
 import random
 import operator
 
-TOURNAMENT_ID   = 551
-MAJOR           = True
+TOURNAMENT_ID   = 585
+MAJOR           = False
 
 MAX_SALARY      = 50000
 NUM_PICKS       = 6
 
 PICKS = {
     'Ben': [
-        'Viktor Hovland',
-        'Jordan Spieth',
-        'Sungjae Im',
-        'Tommy Fleetwood',
-        'Rickie Fowler',
-        'Eric Cole',
+        'Max Homa',
+        'Jason Day',
+        'Min Woo Lee',
+        'Sam Stevens',
+        'Luke List',
+        'Charley Hoffman',
     ],
     'Greg': [
-        'Xander Schauffele',
-        'Collin Morikawa',
-        'Tyrrell Hatton',
-        'Hideki Matsuyama',
-        'Mito Pereira',
-        'Dylan Wu',
+        'Harris English',
+        'Sahith Theegala',
+        'Jason Day',
+        'Tony Finau',
+        'Sam Stevens',
+        'Jhonattan Vegas',
     ],
     'Mike': [
-        'Xander Schauffele',
-        'Jordan Spieth',
-        'Tony Finau',
-        'Justin Rose',
-        'Wyndham Clark',
-        'Mito Pereira',
+        'Collin Morikawa',
+        'Sungjae Im',
+        'Taylor Montgomery',
+        'Luke List',
+        'Sam Ryder',
+        'Akshay Bhatia',
     ],
     'Don': [
-        'Scottie Scheffler',
-        'Rickie Fowler',
-        'Wyndham Clark',
-        'Denny McCarthy',
-        'Xander Schauffele',
+        'Patrick Cantlay',
+        'Emiliano Grillo',
+        'Chez Reavie',
+        'Daniel Berger',
         'Adam Schenk',
+        'Collin Morikawa',
     ],
     'Sean': [
-        'Brooks Koepka',
-        'Scottie Scheffler',
-        'Xander Schauffele',
-        'Jesse Schutte',
-        'Christian Cavaliere',
-        'Ryutaro Nagano',
+        'Max Homa',
+        'Sahith Theegala',
+        'Ludvig Aberg',
+        'Sepp Straka',
+        'Joel Dahmen',
+        'Andrew Novak',
     ],
 }
 
@@ -77,6 +77,7 @@ KEY = 'a478d29a98e54eac8e9ebf1f218dd0b8'
 START_DAY_WINDOW            = 4
 END_DAY_WINDOW              = 1
 PLAYERS_FILENAME            = 'player_profiles.json'
+HEADSHOTS_FILENAME          = 'headshots.json'
 LEADERBOARD_UPDATE_PERIOD   = 10 * 60
 ROUND_END_SLEEP_PERIOD      = 1 * 60 * 60
 MAJOR_MULTIPLIER            = 2
@@ -206,6 +207,10 @@ def api_get_dfs_slates(tournament_id):
     print('API-CALL: {}'.format(inspect.currentframe().f_code.co_name))
     return api_request(BASE_URL + '/golf/v2/json/DfsSlatesByTournament/{}'.format(tournament_id))
 
+def api_get_headshots():
+    print('API-CALL: {}'.format(inspect.currentframe().f_code.co_name))
+    return api_request(BASE_URL + '/v3/golf/headshots/json/Headshots')
+
 def get_active_tournaments():
     active_tournaments = []
 
@@ -329,6 +334,21 @@ def load_player_profiles():
     player_profiles = json.load(input_file)
 
     return player_profiles
+
+def fetch_headshots():
+    headshots = api_get_headshots()
+
+    output_file = open(HEADSHOTS_FILENAME, 'w')
+    json.dump(headshots, output_file)
+    output_file.close()
+
+    return headshots
+
+def load_headshots():
+    input_file = open(HEADSHOTS_FILENAME, 'r')
+    headshots = json.load(input_file)
+
+    return headshots
 
 def get_db_connection():
     conn = sqlite3.connect('database.db')
@@ -646,6 +666,8 @@ def results():
                 player['TotalThrough'] = 'F'
 
     player_profiles = load_player_profiles()
+    headshots = load_headshots()
+    pprint(headshots)
     picks = get_picks(tournament_id)
 
     edited_picks = {}
@@ -687,12 +709,19 @@ def results():
                         totals[owner] += int(standing['OneAndDonePoints'])
                     else:
                         totals[owner] += int(standing['Points'])
+
+                    headshot_url = player_profile['PhotoUrl']
+                    for headshot in headshots:
+                        if headshot['PlayerID'] == pick['PlayerID']:
+                            headshot_url = headshot['PreferredHostedHeadshotUrl']
+                            break
+
                     edited_picks[owner].append({
                         'DraftKingsName'        : player_profile['DraftKingsName'],
-                        'Rank'                  : int(standing['Rank']),
+                        'Rank'                  : standing['Rank'],
                         'Points'                : standing['Points'],
                         'OneAndDonePoints'      : standing['OneAndDonePoints'],
-                        'PhotoUrl'              : player_profile['PhotoUrl'],
+                        'PhotoUrl'              : headshot_url,
                         'OneAndDone'            : pick['OneAndDone'],
                         'TotalThrough'          : player['TotalThrough'],
                         'TeeTime'               : player['TeeTime'],
@@ -700,7 +729,7 @@ def results():
                     })
 
         # edited_picks[owner] = dict(sorted(totals.items(), key=lambda item: item[1], reverse=True))
-        edited_picks[owner] = sorted(edited_picks[owner], key=operator.itemgetter('Rank'))
+        # edited_picks[owner] = sorted(edited_picks[owner], key=operator.itemgetter('Rank'))
 
     totals = dict(sorted(totals.items(), key=lambda item: item[1], reverse=True))
 
@@ -953,6 +982,8 @@ def manage_leaderboard(tournament_id, starting_round_num=1):
 
     first_iteration = True
     fetch_player_profiles()
+    # TODO: uncomment if I ever get access to the headshots service. I got lucky and magically got access to the headshots for one fetch. But my access was blocked on the 2nd attempt.
+    # fetch_headshots()
     leaderboard = api_get_leaderboard(tournament_id)
     num_rounds = len(leaderboard['Tournament']['Rounds'])
 
@@ -1167,44 +1198,8 @@ def points(tournament_id):
     print(table)
 
 def sandbox():
-    # leaderboard, last_updated = get_leaderboard(TOURNAMENT_ID)
-    leaderboard = api_get_leaderboard(TOURNAMENT_ID)
-    for player in leaderboard['Players']:
-        pprint(player)
-    # #     print(player['TeeTime'])
-
-
-    # dictrows = [dict(row) for row in leaderboard]
-
-    # for player in dictrows:
-    #     print(player['TeeTime'])
-    #     print(get_time_str(convert_tee_time(player['TeeTime'])))
-    #     player['TeeTime'] = get_time_str(convert_tee_time(player['TeeTime']))
-
-    # for player in dictrows:
-    #     print(player['TeeTime'])
-    #     print(player['PlayerID'])
-
-    # leaderboard, last_updated = get_leaderboard(TOURNAMENT_ID)
-    # last_updated_str, total_seconds = get_last_updated_str(last_updated)
-
-    # # Convert and simplify tee times
-    # leaderboard = [dict(row) for row in leaderboard]
-    # for player in leaderboard:
-    #     if player['TeeTime'] is not None and player['TeeTime'] != 'None':
-    #         player['TeeTime'] = get_time_str(convert_tee_time(player['TeeTime']))
-
-
-    # picks = get_picks(TOURNAMENT_ID)
-    # for pick in picks['Don']:
-    #     for player in leaderboard:
-    #         print(pick['PlayerID'], player['PlayerID'])
-    #         if int(pick['PlayerID']) == int(player['PlayerID']):
-    #             print('MATCH')
-    #             # print(pick['PlayerID'])
-
-        # print(player['PlayerID'])
-
+    headshots = api_get_headshots()
+    pprint(headshots)
 
 def main():
     args = parse_args()

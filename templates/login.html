@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% set active_page = "index" %}
+
+{% block content %}
+    <h1>{% block title %} Login {% endblock %}</h1>
+    <div class="box">
+        <form method="POST" action="/login">
+            <div class="field">
+                <div class="control">
+                    <input class="input is-large" type="password" name="password" placeholder="Password">
+                </div>
+            </div>
+            <button class="button is-block is-info is-large is-fullwidth">Login</button>
+        </form>
+    </div>
+{% endblock %}
