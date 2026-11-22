@@ -31,9 +31,30 @@ Regular picks use this table. Places 61 through 1000 score 3 points. Anyone else
 
 Ties use competition ranking. Two golfers tied for second both score second-place points, and the next golfer is fourth. Golfers with no score yet are unranked and score 0.
 
-Set `MAJOR = True` in `golf.py` to double every award for a major. One-and-done picks use a shorter top-10 table (50 points for a win, down to 3 for tenth). That path is currently off: `ONE_N_DONES` is not written into the picks table.
+Set `MAJOR = True` in `gtgolf/config.py` to double every award for a major. One-and-done picks use a shorter top-10 table (50 points for a win, down to 3 for tenth). That path is currently off: `ONE_N_DONES` is not written into the picks table.
 
 The standings page also shifts SportsData tee times three hours earlier (Eastern source, Pacific display). If a tee time was more than an hour ago and the feed has no holes-through value, the golfer is shown as `F`. The feed does not send that marker itself.
+
+## Layout
+
+`python golf.py` is the command you run. The code behind it is the `gtgolf` package:
+
+```text
+golf.py                 command-line entry point
+gtgolf/
+  config.py             tournament, picks, points tables, API key, file paths
+  api.py                SportsData.io client
+  profiles.py           cached player_profiles.json and headshots.json
+  scoring.py            place-to-points and competition ranking
+  db.py                 SQLite schema and queries
+  tee_times.py          Eastern-to-Pacific tee times and the "updated ago" text
+  leaderboard.py        live polling loop
+  optimizer.py          DraftKings salary-cap search
+  web.py                Flask routes
+  cli.py                argument parsing and command dispatch
+templates/              pages (unchanged location)
+static/                 stylesheets
+```
 
 ## Setup
 
@@ -95,12 +116,14 @@ python3 golf.py sandbox                 # print the headshot feed
 
 ## Change the week
 
-Edit the top of `golf.py`:
+Edit `gtgolf/config.py`:
 
 - `TOURNAMENT_ID` is the event the site and the CLI use
 - `MAJOR` doubles points
 - `PICKS` is the five lineups, using DraftKings display names
 - `KEY` is the SportsData.io API key
+
+Those names are read when a command or page runs, not copied into `golf.py`.
 
 Then load data and picks:
 
