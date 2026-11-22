@@ -21,6 +21,11 @@ ROOT = Path(__file__).resolve().parents[1]
 os.chdir(ROOT)
 
 import golf  # noqa: E402
+import gtgolf.api
+import gtgolf.config
+import gtgolf.optimizer
+import gtgolf.tee_times
+import gtgolf.web
 
 
 def _oracle_points(rank, one_n_done=False, major=False):
@@ -153,14 +158,14 @@ class TeeTimeTests(unittest.TestCase):
         self.assertIsNone(golf.get_first_tee_time(leaderboard, 3))
 
     def test_last_updated_text(self):
-        real_datetime = golf.datetime
+        real_datetime = gtgolf.tee_times.datetime
 
         class Frozen(real_datetime):
             @classmethod
             def now(cls, tz=None):
                 return real_datetime(2024, 1, 25, 9, 21, 25)
 
-        with mock.patch('golf.datetime', Frozen):
+        with mock.patch('gtgolf.tee_times.datetime', Frozen):
             text, seconds = golf.get_last_updated_str({'LeaderboardLastUpdated': '2024-01-25 08:20:20'})
         self.assertEqual(text, 'Updated 1h 1m 5s ago')
         self.assertEqual(seconds, 3665)
@@ -170,7 +175,7 @@ class TeeTimeTests(unittest.TestCase):
             def now(cls, tz=None):
                 return real_datetime(2024, 1, 25, 8, 21, 25)
 
-        with mock.patch('golf.datetime', FrozenMinutes):
+        with mock.patch('gtgolf.tee_times.datetime', FrozenMinutes):
             text, seconds = golf.get_last_updated_str({'LeaderboardLastUpdated': '2024-01-25 08:20:20'})
         self.assertEqual(text, 'Updated 1m 5s ago')
         self.assertEqual(seconds, 65)
@@ -180,7 +185,7 @@ class TeeTimeTests(unittest.TestCase):
             def now(cls, tz=None):
                 return real_datetime(2024, 1, 25, 8, 20, 30)
 
-        with mock.patch('golf.datetime', FrozenSeconds):
+        with mock.patch('gtgolf.tee_times.datetime', FrozenSeconds):
             text, seconds = golf.get_last_updated_str({'LeaderboardLastUpdated': '2024-01-25 08:20:20'})
         self.assertEqual(text, 'Updated 10s ago')
         self.assertEqual(seconds, 10)
@@ -208,7 +213,7 @@ class RosterTests(unittest.TestCase):
             {'DraftKingsName': 'D', 'DraftKingsSalary': 8000, 'FantasyPoints': 4, 'Value': 4},
             {'DraftKingsName': 'E', 'DraftKingsSalary': 8000, 'FantasyPoints': 9, 'Value': 9},
         ]
-        with mock.patch.object(golf, 'get_starting_roster', return_value=[players[0], players[2]]):
+        with mock.patch.object(gtgolf.optimizer, 'get_starting_roster', return_value=[players[0], players[2]]):
             with mock.patch('sys.stdout', StringIO()):
                 roster = golf.get_roster(players)
         # A upgrades to B. C is not upgraded to B because B was just taken, and
@@ -219,7 +224,7 @@ class RosterTests(unittest.TestCase):
             {'DraftKingsName': 'A', 'DraftKingsSalary': 9000, 'FantasyPoints': 10, 'Value': 10},
             {'DraftKingsName': 'B', 'DraftKingsSalary': 9000, 'FantasyPoints': 10, 'Value': 10},
         ]
-        with mock.patch.object(golf, 'get_starting_roster', return_value=[tied[0]]):
+        with mock.patch.object(gtgolf.optimizer, 'get_starting_roster', return_value=[tied[0]]):
             with mock.patch('sys.stdout', StringIO()):
                 roster = golf.get_roster(tied)
         self.assertEqual(roster.players[0]['DraftKingsName'], 'A')
@@ -260,11 +265,11 @@ class DatabaseCase(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.db_path = os.path.join(self.tmp.name, 'database.db')
         shutil.copy(ROOT / 'database.db', self.db_path)
-        self.previous_database = golf.DATABASE
-        golf.DATABASE = self.db_path
+        self.previous_database = gtgolf.config.DATABASE
+        gtgolf.config.DATABASE = self.db_path
 
     def tearDown(self):
-        golf.DATABASE = self.previous_database
+        gtgolf.config.DATABASE = self.previous_database
         self.tmp.cleanup()
 
 class DatabaseTests(DatabaseCase):
@@ -400,7 +405,7 @@ class DatabaseTests(DatabaseCase):
 
     def test_results_standings_match_the_saved_pool(self):
         with mock.patch('sys.stdout', StringIO()) as stdout:
-            with mock.patch('golf.render_template', side_effect=lambda template, **kwargs: (template, kwargs)):
+            with mock.patch('gtgolf.web.render_template', side_effect=lambda template, **kwargs: (template, kwargs)):
                 template, kwargs = golf.results()
         self.assertNotIn('PreferredHostedHeadshotUrl', stdout.getvalue())
         self.assertEqual(template, 'results.html')
@@ -432,11 +437,11 @@ class DatabaseTests(DatabaseCase):
         self.assertEqual(stable[0][2:], ('Kevin Yu', '150', '50', 'F', '8:50AM'))
 
     def test_missing_tournament_results_are_a_404(self):
-        with mock.patch.object(golf, 'TOURNAMENT_ID', 999999):
+        with mock.patch.object(gtgolf.config, 'TOURNAMENT_ID', 999999):
             self.assertEqual(golf.results(), ('Tournament not found', 404))
 
     def test_salary_values_do_not_call_the_network(self):
-        with mock.patch.object(golf, 'api_request', side_effect=AssertionError('network')):
+        with mock.patch.object(gtgolf.api, 'api_request', side_effect=AssertionError('network')):
             players = golf.get_players(546)
             self.assertEqual(len(players), 163)
             for player in players:
